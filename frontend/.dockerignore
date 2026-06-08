@@ -5,9 +5,6 @@ npm-debug.log
 .env
 .env.local
 .env.*.local
-*.md
-src
-public
 dist
 .DS_Store
 .vscode
@@ -17,8 +14,3 @@ coverage
 .next
 .cache
 tmp
-.eslintignore
-tsconfig.json
-vite.config.ts
-postcss.config.js
-tailwind.config.js
