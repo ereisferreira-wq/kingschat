@@ -96,13 +96,6 @@ async function seedAdminUser() {
   });
 
   logger.info(`Default admin user created: ${adminEmail}`);
-
-  // Approve companies that were pending when no admin existed
-  const pendingCount = await Company.count({ where: { status: false } });
-  if (pendingCount > 0) {
-    await Company.update({ status: true }, { where: { status: false } });
-    logger.info(`Auto-approved ${pendingCount} pending compan(ies) — no admin was available to approve them`);
-  }
 }
 
 async function startup() {
