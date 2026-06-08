@@ -14,6 +14,7 @@
     "@langchain/openai": "^0.0.14",
     "@whiskeysockets/baileys": "^6.6.0",
     "@hapi/boom": "^10.0.1",
+    "express-rate-limit": "^7.1.5",
     "axios": "^1.6.2",
     "bcryptjs": "^2.4.3",
     "bull": "^4.11.5",

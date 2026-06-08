@@ -6,7 +6,11 @@ import Ticket from "./Ticket";
 import Contact from "./Contact";
 import Company from "./Company";
 
-@Table({ tableName: "messages" })
+@Table({ tableName: "messages", indexes: [
+  { fields: ["ticketId"] },
+  { fields: ["contactId"] },
+  { fields: ["companyId"] },
+] })
 class Message extends Model<Message> {
   @PrimaryKey @AutoIncrement @Column(DataType.INTEGER)
   id: number;

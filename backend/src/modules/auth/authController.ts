@@ -99,16 +99,13 @@ export async function signup(req: Request, res: Response) {
     return res.status(500).json({ error: "No available plan" });
   }
 
-  const companyCount = await Company.count();
-  const isFirst = companyCount === 0;
-
   const receiptPath = req.file ? (req.file as any).path : "";
 
   const company = await Company.create({
     name: companyName || name + "'s Company",
     email,
     phone,
-    status: isFirst,
+    status: false,
     planId: selectedPlan.id,
     dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     paymentReceipt: receiptPath,
@@ -118,8 +115,8 @@ export async function signup(req: Request, res: Response) {
     name,
     email,
     password,
-    role: isFirst ? "admin" : "user",
-    super: isFirst,
+    role: "user",
+    super: false,
     companyId: company.id,
     isActive: true,
   });

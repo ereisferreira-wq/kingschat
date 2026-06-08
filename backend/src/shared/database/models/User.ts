@@ -5,7 +5,11 @@ import {
 import { hash, compare } from "bcryptjs";
 import Company from "./Company";
 
-@Table({ tableName: "users" })
+@Table({ tableName: "users", indexes: [
+  { fields: ["email"], unique: true },
+  { fields: ["companyId"] },
+  { fields: ["role"] },
+] })
 class User extends Model<User> {
   @PrimaryKey @AutoIncrement @Column(DataType.INTEGER)
   id: number;
@@ -57,7 +61,7 @@ class User extends Model<User> {
   @BeforeCreate
   static async hashPassword(instance: User) {
     if (instance.password) {
-      instance.passwordHash = await hash(instance.password, 8);
+      instance.passwordHash = await hash(instance.password, 12);
     }
   }
 

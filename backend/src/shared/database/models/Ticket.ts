@@ -8,7 +8,13 @@ import User from "./User";
 import Whatsapp from "./Whatsapp";
 import Company from "./Company";
 
-@Table({ tableName: "tickets" })
+@Table({ tableName: "tickets", indexes: [
+  { fields: ["companyId"] },
+  { fields: ["contactId"] },
+  { fields: ["whatsappId"] },
+  { fields: ["userId"] },
+  { fields: ["status", "companyId"] },
+] })
 class Ticket extends Model<Ticket> {
   @PrimaryKey @AutoIncrement @Column(DataType.INTEGER)
   id: number;

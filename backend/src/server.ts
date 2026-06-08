@@ -101,8 +101,22 @@ async function seedAdminUser() {
   logger.info(`Default admin user created: ${adminEmail}`);
 }
 
+function validateEnv() {
+  const required = ["JWT_SECRET", "JWT_REFRESH_SECRET", "DB_HOST", "DB_USER", "DB_PASS", "DB_NAME"];
+  const missing = required.filter(k => !process.env[k]);
+  if (missing.length > 0) {
+    logger.error(`Missing required environment variables: ${missing.join(", ")}`);
+    process.exit(1);
+  }
+  if (process.env.JWT_SECRET === "secret" || process.env.JWT_REFRESH_SECRET === "refresh_secret") {
+    logger.error("JWT secrets are still using insecure defaults. Update JWT_SECRET and JWT_REFRESH_SECRET in .env");
+    process.exit(1);
+  }
+}
+
 async function startup() {
   try {
+    validateEnv();
     await db.authenticate();
     logger.info("Database connected");
 

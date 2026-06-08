@@ -18,11 +18,20 @@ ENV NODE_ENV=production
 # Install curl for health checks
 RUN apk add --no-cache curl
 
+# Create non-root user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
 COPY package*.json ./
 RUN npm ci --only=production && npm cache clean --force
 
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist
+
+# Create required directories with proper permissions
+RUN mkdir -p /app/data /app/sessions /app/uploads && \
+    chown -R appuser:appgroup /app
+
+USER appuser
 
 EXPOSE 3000
 
