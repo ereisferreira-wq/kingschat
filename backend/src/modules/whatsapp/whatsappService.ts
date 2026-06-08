@@ -4,9 +4,7 @@ import makeWASocket, {
   useMultiFileAuthState,
   WASocket,
   Browsers,
-  fetchLatestWaWebVersion,
   isJidBroadcast,
-  isJidGroup,
   jidNormalizedUser,
   makeCacheableSignalKeyStore,
 } from "@whiskeysockets/baileys";
@@ -49,11 +47,8 @@ export async function connectWhatsApp(whatsappId: number) {
   const sessionPath = path.join(sessionsDir, `whatsapp-${whatsappId}`);
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
 
-  const { version } = await fetchLatestWaWebVersion();
-  logger.info(`WhatsApp Web version: ${version?.join(".") || "latest"}`);
-
   const sock = makeWASocket({
-    version: version || [2, 2410, 1],
+    version: [2, 3000, 1015920675],
     auth: {
       creds: state.creds,
       keys: makeCacheableSignalKeyStore(state.keys, logger as any),
@@ -63,9 +58,6 @@ export async function connectWhatsApp(whatsappId: number) {
     emitOwnEvents: true,
     browser: Browsers.appropriate("Desktop"),
     markOnlineOnConnect: false,
-    connectTimeoutMs: 30_000,
-    keepAliveIntervalMs: 30_000,
-    maxMsgRetryCount: 3,
     shouldIgnoreJid: (jid) => isJidBroadcast(jid),
   });
 
@@ -80,7 +72,7 @@ export async function connectWhatsApp(whatsappId: number) {
       retriesQrCode.set(whatsappId, qrRetryCount);
 
       if (qrRetryCount > 3) {
-        logger.warn(`WhatsApp ${whatsappId} exceeded QR retries, resetting session`);
+        logger.warn(`WhatsApp ${whatsappId} exceeded QR retries`);
         await whatsapp.update({ status: "DISCONNECTED", qrcode: "" });
         sock.ev.removeAllListeners("connection.update");
         sock.ws?.close();
@@ -94,21 +86,34 @@ export async function connectWhatsApp(whatsappId: number) {
     }
 
     if (connection === "close") {
-      const shouldReconnect =
-        (lastDisconnect?.error as Boom)?.output?.statusCode !==
-        DisconnectReason.loggedOut;
+      const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
+      const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+      const isForbidden = statusCode === 403;
 
-      if (shouldReconnect) {
-        logger.info(`Reconnecting whatsapp ${whatsappId}...`);
+      if (isForbidden) {
+        logger.warn(`WhatsApp ${whatsappId} forbidden, clearing session`);
+        await whatsapp.update({ status: "DISCONNECTED", qrcode: "" });
+        fs.rmSync(sessionPath, { recursive: true, force: true });
         connections.delete(whatsappId);
-        setTimeout(() => connectWhatsApp(whatsappId), 2000);
-      } else {
+        retriesQrCode.delete(whatsappId);
+        emitSession(whatsapp);
+        return;
+      }
+
+      if (isLoggedOut) {
         await whatsapp.update({ status: "DISCONNECTED", qrcode: "" });
         connections.delete(whatsappId);
         retriesQrCode.delete(whatsappId);
         logger.info(`Whatsapp ${whatsappId} disconnected (logged out)`);
         emitSession(whatsapp);
+        return;
       }
+
+      // Connection failure — retry with backoff
+      const retryDelay = Math.min(5000 * Math.pow(2, qrRetryCount), 60000);
+      logger.info(`Reconnecting whatsapp ${whatsappId} in ${retryDelay}ms...`);
+      connections.delete(whatsappId);
+      setTimeout(() => connectWhatsApp(whatsappId), retryDelay);
     }
 
     if (connection === "open") {

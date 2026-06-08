@@ -32,7 +32,6 @@ const upload = multer({
 const authRoutes = Router();
 
 authRoutes.post("/login", login);
-authRoutes.post("/login", login);
 authRoutes.post("/signup", upload.single("receipt"), signup);
 authRoutes.post("/refresh-token", refreshToken);
 authRoutes.get("/me", isAuth, me);

@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
+import { hash } from "bcryptjs";
 import User from "../../shared/database/models/User";
 import Company from "../../shared/database/models/Company";
 import Plan from "../../shared/database/models/Plan";
@@ -229,7 +230,8 @@ export async function changePassword(req: Request, res: Response) {
     return res.status(401).json({ error: "Current password is incorrect" });
   }
 
-  await user.update({ password: newPassword });
+  const hashed = await hash(newPassword, 12);
+  await User.update({ passwordHash: hashed }, { where: { id: user.id } });
   res.json({ message: "Password changed successfully" });
 }
 
@@ -253,7 +255,8 @@ export async function adminResetPassword(req: Request, res: Response) {
     return res.status(403).json({ error: "Cannot reset password for user outside your company" });
   }
 
-  await user.update({ password: newPassword });
+  const hashed = await hash(newPassword, 12);
+  await User.update({ passwordHash: hashed }, { where: { id: user.id } });
   res.json({ message: "Password reset successfully", userId });
 }
 
