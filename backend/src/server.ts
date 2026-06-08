@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import http from "http";
 import app from "./app";
 import db from "./shared/database/index";
 import { connectRedis } from "./shared/services/redis";
@@ -8,10 +9,12 @@ import Company from "./shared/database/models/Company";
 import User from "./shared/database/models/User";
 import { startScheduler } from "./modules/scheduler/schedulerService";
 import { startLicenseService } from "./modules/company/licenseService";
+import { initSocket } from "./lib/socket";
 import fs from "fs";
 import path from "path";
 
 const PORT = process.env.PORT || 3000;
+const server = http.createServer(app);
 
 const dataDir = path.resolve(__dirname, "../data");
 if (!fs.existsSync(dataDir)) {
@@ -117,7 +120,9 @@ async function startup() {
       logger.warn("Redis not available (optional in dev): " + err.message);
     }
 
-    app.listen(PORT, () => {
+    initSocket(server);
+
+    server.listen(PORT, () => {
       logger.info(`Server running on http://localhost:${PORT}`);
     });
 

@@ -3,13 +3,18 @@ import makeWASocket, {
   DisconnectReason,
   useMultiFileAuthState,
   WASocket,
+  Browsers,
+  isJidBroadcast,
+  isJidGroup,
+  jidNormalizedUser,
+  makeCacheableSignalKeyStore,
 } from "@whiskeysockets/baileys";
 import * as fs from "fs";
 import * as path from "path";
 import Whatsapp from "../../shared/database/models/Whatsapp";
-import { getRedis } from "../../shared/services/redis";
 import logger from "../../shared/utils/logger";
 import { handleWhatsAppMessage } from "../chatbot/chatbotService";
+import { emitToCompany } from "../../lib/socket";
 
 const sessionsDir = path.resolve(__dirname, "../../../sessions");
 if (!fs.existsSync(sessionsDir)) {
@@ -17,6 +22,24 @@ if (!fs.existsSync(sessionsDir)) {
 }
 
 const connections = new Map<number, WASocket>();
+const retriesQrCode = new Map<number, number>();
+
+function emitSession(whatsapp: Whatsapp) {
+  emitToCompany(whatsapp.companyId, `company:${whatsapp.companyId}:whatsappSession`, {
+    action: "update",
+    session: {
+      id: whatsapp.id,
+      name: whatsapp.name,
+      status: whatsapp.status,
+      qrcode: whatsapp.qrcode,
+      number: whatsapp.number,
+      battery: whatsapp.battery,
+      plugged: whatsapp.plugged,
+      isDefault: whatsapp.isDefault,
+      companyId: whatsapp.companyId,
+    },
+  });
+}
 
 export async function connectWhatsApp(whatsappId: number) {
   const whatsapp = await Whatsapp.findByPk(whatsappId);
@@ -26,20 +49,40 @@ export async function connectWhatsApp(whatsappId: number) {
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
 
   const sock = makeWASocket({
-    auth: state,
-    printQRInTerminal: true,
+    auth: {
+      creds: state.creds,
+      keys: makeCacheableSignalKeyStore(state.keys, logger as any),
+    },
+    printQRInTerminal: false,
     syncFullHistory: false,
-    emitOwnEvents: false,
+    emitOwnEvents: true,
+    browser: Browsers.appropriate("Desktop"),
+    markOnlineOnConnect: false,
+    shouldIgnoreJid: (jid) => isJidBroadcast(jid),
   });
 
   connections.set(whatsappId, sock);
+  let qrRetryCount = retriesQrCode.get(whatsappId) || 0;
 
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
-      await whatsapp.update({ qrcode: qr, status: "QRCODE" });
-      logger.info(`QR Code generated for whatsapp ${whatsappId}`);
+      qrRetryCount += 1;
+      retriesQrCode.set(whatsappId, qrRetryCount);
+
+      if (qrRetryCount > 3) {
+        logger.warn(`WhatsApp ${whatsappId} exceeded QR retries, resetting session`);
+        await whatsapp.update({ status: "DISCONNECTED", qrcode: "" });
+        sock.ev.removeAllListeners("connection.update");
+        sock.ws?.close();
+        connections.delete(whatsappId);
+        retriesQrCode.delete(whatsappId);
+      } else {
+        await whatsapp.update({ qrcode: qr, status: "QRCODE" });
+        logger.info(`QR Code generated for whatsapp ${whatsappId} (attempt ${qrRetryCount})`);
+        emitSession(whatsapp);
+      }
     }
 
     if (connection === "close") {
@@ -49,22 +92,30 @@ export async function connectWhatsApp(whatsappId: number) {
 
       if (shouldReconnect) {
         logger.info(`Reconnecting whatsapp ${whatsappId}...`);
-        connectWhatsApp(whatsappId);
-      } else {
-        await whatsapp.update({ status: "DISCONNECTED", session: null });
         connections.delete(whatsappId);
-        logger.info(`Whatsapp ${whatsappId} disconnected`);
+        setTimeout(() => connectWhatsApp(whatsappId), 2000);
+      } else {
+        await whatsapp.update({ status: "DISCONNECTED", qrcode: "" });
+        connections.delete(whatsappId);
+        retriesQrCode.delete(whatsappId);
+        logger.info(`Whatsapp ${whatsappId} disconnected (logged out)`);
+        emitSession(whatsapp);
       }
     }
 
     if (connection === "open") {
-      const number = sock.user?.id?.split(":")[0] || "";
+      const number = sock.user?.id
+        ? jidNormalizedUser(sock.user.id).split("@")[0]
+        : "";
       await whatsapp.update({
         status: "CONNECTED",
-        qrcode: null,
+        qrcode: "",
         number,
+        retries: 0,
       });
+      retriesQrCode.delete(whatsappId);
       logger.info(`Whatsapp ${whatsappId} connected as ${number}`);
+      emitSession(whatsapp);
     }
   });
 
@@ -90,15 +141,13 @@ export async function disconnectWhatsApp(whatsappId: number) {
 
   const whatsapp = await Whatsapp.findByPk(whatsappId);
   if (whatsapp) {
-    await whatsapp.update({ status: "DISCONNECTED", qrcode: null });
+    await whatsapp.update({ status: "DISCONNECTED", qrcode: "" });
+    emitSession(whatsapp);
   }
+  retriesQrCode.delete(whatsappId);
 }
 
-export async function sendMessage(
-  whatsappId: number,
-  to: string,
-  text: string
-) {
+export async function sendMessage(whatsappId: number, to: string, text: string) {
   const sock = connections.get(whatsappId);
   if (!sock) throw new Error("WhatsApp not connected");
 

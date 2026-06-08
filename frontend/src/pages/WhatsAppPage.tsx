@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import Layout from "../components/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -8,13 +8,14 @@ import api from "../lib/api";
 import toast from "react-hot-toast";
 import { Plus, Smartphone, QrCode, Trash2, WifiOff, Loader2 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
+import { useSocket } from "../hooks/useSocket";
 
 export default function WhatsAppPage() {
   const [whatsapps, setWhatsapps] = useState<any[]>([]);
   const [name, setName] = useState("");
   const [showQR, setShowQR] = useState<number | null>(null);
   const [qrData, setQrData] = useState<string | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const showQRRef = useRef<number | null>(null);
 
   const load = () => {
     api.get("/whatsapp").then((r) => setWhatsapps(r.data.whatsapps));
@@ -22,28 +23,30 @@ export default function WhatsAppPage() {
 
   useEffect(() => { load() }, []);
 
-  useEffect(() => {
-    if (showQR !== null) {
-      pollRef.current = setInterval(async () => {
-        try {
-          const res = await api.get(`/whatsapp/${showQR}/status`);
-          const data = res.data;
-          if (data.qrcode) {
-            setQrData(data.qrcode);
-          }
-          if (data.status === "CONNECTED") {
-            setShowQR(null);
-            setQrData(null);
-            load();
-            if (pollRef.current) clearInterval(pollRef.current);
-          }
-        } catch {}
-      }, 2000);
+  useEffect(() => { showQRRef.current = showQR; }, [showQR]);
+
+  useSocket("whatsappSession", (data: any) => {
+    if (data?.action === "update" && data?.session) {
+      setWhatsapps((prev) => {
+        const idx = prev.findIndex((w) => w.id === data.session.id);
+        if (idx >= 0) {
+          const updated = [...prev];
+          updated[idx] = { ...updated[idx], ...data.session };
+          return updated;
+        }
+        return prev;
+      });
+
+      if (data.session.qrcode && showQRRef.current === data.session.id) {
+        setQrData(data.session.qrcode);
+      }
+
+      if (data.session.status === "CONNECTED" && showQRRef.current === data.session.id) {
+        setShowQR(null);
+        setQrData(null);
+      }
     }
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [showQR]);
+  });
 
   const create = async () => {
     if (!name) return toast.error("Digite um nome");
