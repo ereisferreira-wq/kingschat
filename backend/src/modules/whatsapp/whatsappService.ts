@@ -117,6 +117,7 @@ export async function getWhatsAppStatus(whatsappId: number) {
     id: whatsappId,
     name: whatsapp?.name,
     status: whatsapp?.status,
+    qrcode: whatsapp?.qrcode,
     number: whatsapp?.number,
     battery: whatsapp?.battery,
     connected: !!sock,

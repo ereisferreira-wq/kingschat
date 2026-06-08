@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import Layout from "../components/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -6,18 +6,44 @@ import { Input } from "../components/ui/input";
 import { Badge } from "../components/ui/badge";
 import api from "../lib/api";
 import toast from "react-hot-toast";
-import { Plus, Smartphone, QrCode, Trash2, WifiOff } from "lucide-react";
+import { Plus, Smartphone, QrCode, Trash2, WifiOff, Loader2 } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 
 export default function WhatsAppPage() {
   const [whatsapps, setWhatsapps] = useState<any[]>([]);
   const [name, setName] = useState("");
   const [showQR, setShowQR] = useState<number | null>(null);
+  const [qrData, setQrData] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = () => {
     api.get("/whatsapp").then((r) => setWhatsapps(r.data.whatsapps));
   };
 
   useEffect(() => { load() }, []);
+
+  useEffect(() => {
+    if (showQR !== null) {
+      pollRef.current = setInterval(async () => {
+        try {
+          const res = await api.get(`/whatsapp/${showQR}/status`);
+          const data = res.data;
+          if (data.qrcode) {
+            setQrData(data.qrcode);
+          }
+          if (data.status === "CONNECTED") {
+            setShowQR(null);
+            setQrData(null);
+            load();
+            if (pollRef.current) clearInterval(pollRef.current);
+          }
+        } catch {}
+      }, 2000);
+    }
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [showQR]);
 
   const create = async () => {
     if (!name) return toast.error("Digite um nome");
@@ -36,6 +62,7 @@ export default function WhatsAppPage() {
       await api.post(`/whatsapp/${id}/connect`);
       toast.success("Conectando...");
       setShowQR(id);
+      setQrData(null);
       setTimeout(load, 2000);
     } catch (err: any) {
       toast.error(err.response?.data?.error || "Erro");
@@ -94,7 +121,7 @@ export default function WhatsAppPage() {
 
         <div className="grid gap-4">
           {whatsapps.map((w) => (
-            <Card key={w.id}>
+            <Card key={w.id} className="relative">
               <CardContent className="flex items-center justify-between p-6">
                 <div className="flex items-center gap-4">
                   <div className={`p-3 rounded-full ${w.status === "CONNECTED" ? "bg-green-50" : "bg-gray-50"}`}>
@@ -137,6 +164,36 @@ export default function WhatsAppPage() {
                     <Trash2 className="w-4 h-4 text-red-500" />
                   </Button>
                 </div>
+
+              {showQR === w.id && (
+                <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-50 rounded-lg">
+                  <div className="bg-white dark:bg-gray-900 p-6 rounded-xl text-center">
+                    {qrData ? (
+                      <>
+                        <QRCodeSVG value={qrData} size={256} />
+                        <p className="text-sm text-muted-foreground mt-3">
+                          Escaneie com o WhatsApp
+                        </p>
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center gap-3 py-8">
+                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                        <p className="text-sm text-muted-foreground">
+                          Gerando QR Code...
+                        </p>
+                      </div>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-3"
+                      onClick={() => { setShowQR(null); setQrData(null); disconnect(w.id); }}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                </div>
+              )}
               </CardContent>
             </Card>
           ))}
