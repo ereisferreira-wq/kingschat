@@ -69,12 +69,6 @@ async function seedAdminUser() {
     return;
   }
 
-  const userCount = await User.count();
-  if (userCount > 0) {
-    logger.warn("No admin user found, but users already exist. Create an admin manually or configure ADMIN_EMAIL/ADMIN_PASSWORD.");
-    return;
-  }
-
   const plan = await Plan.findOne({ where: { isActive: true }, order: [["price", "ASC"]] });
   if (!plan) {
     logger.warn("Admin user cannot be seeded because no plan exists.");
@@ -102,6 +96,13 @@ async function seedAdminUser() {
   });
 
   logger.info(`Default admin user created: ${adminEmail}`);
+
+  // Approve companies that were pending when no admin existed
+  const pendingCount = await Company.count({ where: { status: false } });
+  if (pendingCount > 0) {
+    await Company.update({ status: true }, { where: { status: false } });
+    logger.info(`Auto-approved ${pendingCount} pending compan(ies) — no admin was available to approve them`);
+  }
 }
 
 async function startup() {
