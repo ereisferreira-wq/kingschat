@@ -4,6 +4,7 @@ import {
   connectWhatsApp,
   disconnectWhatsApp,
   getWhatsAppStatus,
+  requestPairingCode,
 } from "./whatsappService";
 import { checkWhatsAppLimit } from "../../shared/utils/planLimits";
 
@@ -91,4 +92,16 @@ export async function status(req: Request, res: Response) {
   const { id } = req.params;
   const result = await getWhatsAppStatus(Number(id));
   res.json(result);
+}
+
+export async function pairingCode(req: Request, res: Response) {
+  const { id } = req.params;
+  const { phoneNumber } = req.body;
+
+  if (!phoneNumber) {
+    return res.status(400).json({ error: "phoneNumber is required" });
+  }
+
+  const code = await requestPairingCode(Number(id), phoneNumber);
+  res.json({ code, message: "Enter this code in WhatsApp > Linked Devices > Link a Device" });
 }

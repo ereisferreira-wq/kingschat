@@ -23,6 +23,8 @@ if (!fs.existsSync(sessionsDir)) {
 const connections = new Map<number, WASocket>();
 const retriesQrCode = new Map<number, number>();
 
+const msgRetryMap = new Map<string, number>();
+
 function emitSession(whatsapp: Whatsapp) {
   emitToCompany(whatsapp.companyId, `company:${whatsapp.companyId}:whatsappSession`, {
     action: "update",
@@ -47,8 +49,11 @@ export async function connectWhatsApp(whatsappId: number) {
   const sessionPath = path.join(sessionsDir, `whatsapp-${whatsappId}`);
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
 
+  const proxyUrl = process.env.WA_PROXY_URL;
+
   const sock = makeWASocket({
     version: [2, 3000, 1015920675],
+    ...(proxyUrl ? { proxy: { url: proxyUrl } } : {}),
     auth: {
       creds: state.creds,
       keys: makeCacheableSignalKeyStore(state.keys, logger as any),
@@ -58,7 +63,16 @@ export async function connectWhatsApp(whatsappId: number) {
     emitOwnEvents: true,
     browser: Browsers.appropriate("Desktop"),
     markOnlineOnConnect: false,
+    generateHighQualityLinkPreview: true,
+    linkPreviewImageThumbnailWidth: 192,
     shouldIgnoreJid: (jid) => isJidBroadcast(jid),
+    defaultQueryTimeoutMs: undefined,
+    retryRequestDelayMs: 500,
+    maxMsgRetryCount: 5,
+    fireInitQueries: true,
+    transactionOpts: { maxCommitRetries: 10, delayBetweenTriesMs: 3000 },
+    msgRetryCounterCache: msgRetryMap,
+    connectTimeoutMs: 25_000,
   });
 
   connections.set(whatsappId, sock);
@@ -74,10 +88,12 @@ export async function connectWhatsApp(whatsappId: number) {
       if (qrRetryCount > 3) {
         logger.warn(`WhatsApp ${whatsappId} exceeded QR retries`);
         await whatsapp.update({ status: "DISCONNECTED", qrcode: "" });
+        fs.rmSync(sessionPath, { recursive: true, force: true });
         sock.ev.removeAllListeners("connection.update");
         sock.ws?.close();
         connections.delete(whatsappId);
         retriesQrCode.delete(whatsappId);
+        emitSession(whatsapp);
       } else {
         await whatsapp.update({ qrcode: qr, status: "QRCODE" });
         logger.info(`QR Code generated for whatsapp ${whatsappId} (attempt ${qrRetryCount})`);
@@ -91,7 +107,7 @@ export async function connectWhatsApp(whatsappId: number) {
       const isForbidden = statusCode === 403;
 
       if (isForbidden) {
-        logger.warn(`WhatsApp ${whatsappId} forbidden, clearing session`);
+        logger.warn(`WhatsApp ${whatsappId} forbidden (403), clearing session`);
         await whatsapp.update({ status: "DISCONNECTED", qrcode: "" });
         fs.rmSync(sessionPath, { recursive: true, force: true });
         connections.delete(whatsappId);
@@ -100,20 +116,18 @@ export async function connectWhatsApp(whatsappId: number) {
         return;
       }
 
-      if (isLoggedOut) {
-        await whatsapp.update({ status: "DISCONNECTED", qrcode: "" });
+      if (!isLoggedOut) {
+        logger.info(`WhatsApp ${whatsappId} reconnecting in 2s...`);
         connections.delete(whatsappId);
-        retriesQrCode.delete(whatsappId);
-        logger.info(`Whatsapp ${whatsappId} disconnected (logged out)`);
-        emitSession(whatsapp);
+        setTimeout(() => connectWhatsApp(whatsappId), 2000);
         return;
       }
 
-      // Connection failure — retry with backoff
-      const retryDelay = Math.min(5000 * Math.pow(2, qrRetryCount), 60000);
-      logger.info(`Reconnecting whatsapp ${whatsappId} in ${retryDelay}ms...`);
+      await whatsapp.update({ status: "DISCONNECTED", qrcode: "" });
       connections.delete(whatsappId);
-      setTimeout(() => connectWhatsApp(whatsappId), retryDelay);
+      retriesQrCode.delete(whatsappId);
+      logger.info(`Whatsapp ${whatsappId} logged out`);
+      emitSession(whatsapp);
     }
 
     if (connection === "open") {
@@ -143,6 +157,15 @@ export async function connectWhatsApp(whatsappId: number) {
   });
 
   return sock;
+}
+
+export async function requestPairingCode(whatsappId: number, phoneNumber: string) {
+  const sock = connections.get(whatsappId);
+  if (!sock) throw new Error("WhatsApp not connected. Start session first.");
+
+  const code = await sock.requestPairingCode(phoneNumber);
+  logger.info(`Pairing code for ${phoneNumber}: ${code}`);
+  return code;
 }
 
 export async function disconnectWhatsApp(whatsappId: number) {

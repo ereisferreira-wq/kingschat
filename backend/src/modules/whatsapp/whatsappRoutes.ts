@@ -7,6 +7,7 @@ import {
   disconnect,
   remove,
   status,
+  pairingCode,
 } from "./whatsappController";
 
 const whatsappRoutes = Router();
@@ -17,5 +18,6 @@ whatsappRoutes.post("/whatsapp/:id/connect", isAuth, connect);
 whatsappRoutes.post("/whatsapp/:id/disconnect", isAuth, disconnect);
 whatsappRoutes.delete("/whatsapp/:id", isAuth, remove);
 whatsappRoutes.get("/whatsapp/:id/status", isAuth, status);
+whatsappRoutes.post("/whatsapp/:id/pairing-code", isAuth, pairingCode);
 
 export default whatsappRoutes;

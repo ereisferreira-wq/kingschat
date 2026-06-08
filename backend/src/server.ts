@@ -4,6 +4,7 @@ import app from "./app";
 import db from "./shared/database/index";
 import { connectRedis } from "./shared/services/redis";
 import logger from "./shared/utils/logger";
+import { hash } from "bcryptjs";
 import Plan from "./shared/database/models/Plan";
 import Company from "./shared/database/models/Company";
 import User from "./shared/database/models/User";
@@ -67,8 +68,12 @@ async function seedAdminUser() {
   const adminEmail = process.env.ADMIN_EMAIL || "admin@kmenu.ai";
   const adminPassword = process.env.ADMIN_PASSWORD || "Kings@Chat2026#Admin";
 
+  const hashedPassword = await hash(adminPassword, 12);
+
   const adminExists = await User.findOne({ where: { role: "admin" } });
   if (adminExists) {
+    await User.update({ passwordHash: hashedPassword, email: adminEmail }, { where: { id: adminExists.id } });
+    logger.info(`Admin password synced from .env`);
     return;
   }
 
@@ -91,7 +96,7 @@ async function seedAdminUser() {
   await User.create({
     name: "Admin",
     email: adminEmail,
-    password: adminPassword,
+    passwordHash: hashedPassword,
     role: "admin",
     super: true,
     companyId: company.id,
