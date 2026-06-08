@@ -4,6 +4,7 @@ import makeWASocket, {
   useMultiFileAuthState,
   WASocket,
   Browsers,
+  fetchLatestWaWebVersion,
   isJidBroadcast,
   isJidGroup,
   jidNormalizedUser,
@@ -48,7 +49,11 @@ export async function connectWhatsApp(whatsappId: number) {
   const sessionPath = path.join(sessionsDir, `whatsapp-${whatsappId}`);
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
 
+  const { version } = await fetchLatestWaWebVersion();
+  logger.info(`WhatsApp Web version: ${version?.join(".") || "latest"}`);
+
   const sock = makeWASocket({
+    version: version || [2, 2410, 1],
     auth: {
       creds: state.creds,
       keys: makeCacheableSignalKeyStore(state.keys, logger as any),
@@ -58,6 +63,9 @@ export async function connectWhatsApp(whatsappId: number) {
     emitOwnEvents: true,
     browser: Browsers.appropriate("Desktop"),
     markOnlineOnConnect: false,
+    connectTimeoutMs: 30_000,
+    keepAliveIntervalMs: 30_000,
+    maxMsgRetryCount: 3,
     shouldIgnoreJid: (jid) => isJidBroadcast(jid),
   });
 
