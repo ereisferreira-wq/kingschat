@@ -1,0 +1,24 @@
+[2m01:04:05[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /login[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1122:18)
+    at afterConnectMultiple (node:net:1689:7)
+[2m01:04:15[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /login[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1122:18)
+    at afterConnectMultiple (node:net:1689:7)
+[2m01:04:19[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /login[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1122:18)
+    at afterConnectMultiple (node:net:1689:7)
+[2m01:04:21[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /login[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1122:18)
+    at afterConnectMultiple (node:net:1689:7)
+[2m01:04:43[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /login[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1122:18)
+    at afterConnectMultiple (node:net:1689:7)
+[2m01:04:50[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /plans[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1122:18)
+    at afterConnectMultiple (node:net:1689:7)
