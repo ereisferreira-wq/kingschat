@@ -7,6 +7,7 @@ import makeWASocket, {
   isJidBroadcast,
   jidNormalizedUser,
   makeCacheableSignalKeyStore,
+  type CacheStore,
 } from "@whiskeysockets/baileys";
 import * as fs from "fs";
 import * as path from "path";
@@ -23,7 +24,13 @@ if (!fs.existsSync(sessionsDir)) {
 const connections = new Map<number, WASocket>();
 const retriesQrCode = new Map<number, number>();
 
-const msgRetryMap = new Map<string, number>();
+const retryCache = new Map<string, number>();
+const msgRetryMap: CacheStore = {
+  get: (key) => retryCache.get(key),
+  set: (key, value) => { retryCache.set(key, value as number); },
+  del: (key) => { retryCache.delete(key); },
+  flushAll: () => { retryCache.clear(); },
+};
 
 function emitSession(whatsapp: Whatsapp) {
   emitToCompany(whatsapp.companyId, `company:${whatsapp.companyId}:whatsappSession`, {
@@ -42,7 +49,7 @@ function emitSession(whatsapp: Whatsapp) {
   });
 }
 
-export async function connectWhatsApp(whatsappId: number) {
+export async function connectWhatsApp(whatsappId: number): Promise<WASocket> {
   const whatsapp = await Whatsapp.findByPk(whatsappId);
   if (!whatsapp) throw new Error("WhatsApp not found");
 
@@ -138,7 +145,6 @@ export async function connectWhatsApp(whatsappId: number) {
         status: "CONNECTED",
         qrcode: "",
         number,
-        retries: 0,
       });
       retriesQrCode.delete(whatsappId);
       logger.info(`Whatsapp ${whatsappId} connected as ${number}`);
@@ -191,7 +197,7 @@ export async function sendMessage(whatsappId: number, to: string, text: string) 
   await sock.sendMessage(jid, { text });
 }
 
-export function getConnection(whatsappId: number) {
+export function getConnection(whatsappId: number): WASocket | undefined {
   return connections.get(whatsappId);
 }
 
