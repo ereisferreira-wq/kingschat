@@ -26,9 +26,9 @@ const retriesQrCode = new Map<number, number>();
 
 const retryCache = new Map<string, number>();
 const msgRetryMap: CacheStore = {
-  get: (key) => retryCache.get(key),
-  set: (key, value) => { retryCache.set(key, value as number); },
-  del: (key) => { retryCache.delete(key); },
+  get: <T>(key: string) => retryCache.get(key) as T | undefined,
+  set: <T>(key: string, value: T) => { retryCache.set(key, value as unknown as number); },
+  del: (key: string) => { retryCache.delete(key); },
   flushAll: () => { retryCache.clear(); },
 };
 
