@@ -81,6 +81,9 @@ class ChatbotConfig extends Model<ChatbotConfig> {
   @Column(DataType.TEXT)
   transferPrompt: string;
 
+  @Column(DataType.TEXT)
+  knowledgeBase: string;
+
   @ForeignKey(() => Company)
   @Column(DataType.INTEGER)
   companyId: number;

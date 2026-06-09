@@ -5,7 +5,6 @@ import ChatbotConfig from "../../shared/database/models/ChatbotConfig";
 import Ticket from "../../shared/database/models/Ticket";
 import Message from "../../shared/database/models/Message";
 import Contact from "../../shared/database/models/Contact";
-import { queryRag, hasDocuments } from "../rag/ragService";
 import logger from "../../shared/utils/logger";
 import { emitToCompany } from "../../lib/socket";
 
@@ -23,7 +22,7 @@ async function callOpenAI(
 ) {
   const openai = getOpenAI(config);
   const completion = await openai.chat.completions.create({
-    model: config.aiModel || "gpt-3.5-turbo",
+    model: config.aiModel || "gpt-4o-mini",
     messages: messages as any,
     temperature: config.temperature || 0.7,
     max_tokens: config.maxTokens || 2048,
@@ -84,11 +83,8 @@ async function getAiResponse(
     config.systemPrompt || transferPrompt + transferInstruction;
 
   let context = "";
-  if (config.useRag && hasDocuments(companyId)) {
-    const docs = await queryRag(companyId, message, config.aiProvider);
-    if (docs) {
-      context = `\n\nInformações de referência da empresa:\n${docs}\n\nUse essas informações para responder. Se a informação nos documentos não for suficiente, avise e adicione "${TRANSFER_FLAG}" ao final.`;
-    }
+  if (config.knowledgeBase?.trim()) {
+    context = `\n\nBase de conhecimento da empresa:\n${config.knowledgeBase}\n\nUse ESSAS INFORMAÇÕES ACIMA para responder. Se a informação não for suficiente para responder, avise o cliente e adicione "${TRANSFER_FLAG}" ao final.`;
   }
 
   const messages = [

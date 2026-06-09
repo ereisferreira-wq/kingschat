@@ -12,7 +12,7 @@ export default function ChatbotPage() {
   const [config, setConfig] = useState<any>({
     isActive: true,
     aiProvider: "openai",
-    aiModel: "gpt-3.5-turbo",
+    aiModel: "gpt-4o-mini",
     systemPrompt: "",
     temperature: 0.7,
     maxTokens: 2048,
@@ -157,20 +157,28 @@ export default function ChatbotPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>RAG — Base de Conhecimento</CardTitle>
+                <CardTitle>Base de Conhecimento</CardTitle>
               </CardHeader>
               <CardContent>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={config.useRag}
-                    onChange={(e) => setConfig({ ...config, useRag: e.target.checked })}
-                    className="w-4 h-4"
+                <div>
+                  <label className="text-sm font-medium block mb-1">
+                    Informações da empresa para a IA consultar
+                  </label>
+                  <textarea
+                    className="w-full min-h-[200px] rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
+                    value={config.knowledgeBase || ""}
+                    onChange={(e) => setConfig({ ...config, knowledgeBase: e.target.value })}
+                    placeholder={`Ex: Somos a empresa XYZ, fundada em 2020.
+Atendemos de seg a sex das 8h às 18h.
+Nosso produto principal é...
+Preços: ...
+Política de devolução: ...`}
                   />
-                  <span className="text-sm">
-                    Usar documentos (PDFs) para responder perguntas
-                  </span>
-                </label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Escreva aqui todas as informações que a IA deve saber para atender seus clientes. 
+                    Quanto mais detalhado, melhor será a resposta.
+                  </p>
+                </div>
               </CardContent>
             </Card>
 

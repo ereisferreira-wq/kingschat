@@ -4,6 +4,8 @@ import Ticket from "../../shared/database/models/Ticket";
 import Message from "../../shared/database/models/Message";
 import Contact from "../../shared/database/models/Contact";
 import { transferToHumanApi } from "../chatbot/chatbotService";
+import { getConnection } from "../whatsapp/whatsappService";
+import { emitToCompany } from "../../lib/socket";
 
 export async function list(req: Request, res: Response) {
   const { status, page = "1", limit = "20" } = req.query;
@@ -77,4 +79,54 @@ export async function transferToHuman(req: Request, res: Response) {
   } catch (err: any) {
     res.status(404).json({ error: err.message });
   }
+}
+
+export async function sendMessage(req: Request, res: Response) {
+  const { id } = req.params;
+  const { body } = req.body;
+  if (!body?.trim()) {
+    return res.status(400).json({ error: "Message body is required" });
+  }
+
+  const ticket = await Ticket.findOne({
+    where: { id, companyId: req.companyId },
+    include: [Contact],
+  });
+  if (!ticket) {
+    return res.status(404).json({ error: "Ticket not found" });
+  }
+
+  // If bot was active, mark as human-handled so AI stops
+  if (ticket.isBot) {
+    await ticket.update({ isBot: false, status: "open" });
+  }
+
+  const sock = getConnection(ticket.whatsappId);
+  const remoteJid = `${ticket.contact.number}@s.whatsapp.net`;
+
+  if (sock) {
+    await sock.sendMessage(remoteJid, { text: body });
+  }
+
+  const msg = await Message.create({
+    body: body.trim(),
+    fromMe: true,
+    ticketId: ticket.id,
+    contactId: ticket.contactId,
+    companyId: req.companyId,
+  });
+
+  await ticket.update({ lastMessage: body.trim() });
+
+  emitToCompany(req.companyId, "message:new", {
+    ticketId: ticket.id,
+    message: {
+      id: msg.id,
+      body: msg.body,
+      fromMe: true,
+      createdAt: msg.createdAt,
+    },
+  });
+
+  res.json({ message: msg });
 }
