@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
@@ -8,6 +9,7 @@ import { useSocket } from "../hooks/useSocket";
 
 export default function TicketsPage() {
   const [tickets, setTickets] = useState<any[]>([]);
+  const navigate = useNavigate();
 
   const loadTickets = useCallback(() => {
     api.get("/tickets?limit=50").then((r) => setTickets(r.data.tickets));
@@ -50,7 +52,8 @@ export default function TicketsPage() {
                 {tickets.map((ticket: any) => (
                   <div
                     key={ticket.id}
-                    className="flex items-center justify-between p-4 rounded-lg border hover:bg-gray-50 dark:hover:bg-gray-900 transition"
+                    className="flex items-center justify-between p-4 rounded-lg border hover:bg-gray-50 dark:hover:bg-gray-900 transition cursor-pointer"
+                    onClick={() => navigate(`/tickets/${ticket.id}`)}
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">

@@ -15,6 +15,7 @@ import WhatsAppPage from "./pages/WhatsAppPage";
 import DocumentsPage from "./pages/DocumentsPage";
 import ChatbotPage from "./pages/ChatbotPage";
 import TicketsPage from "./pages/TicketsPage";
+import TicketChatPage from "./pages/TicketChatPage";
 import SubscriptionPage from "./pages/SubscriptionPage";
 import CompanySettingsPage from "./pages/CompanySettingsPage";
 import CrmPage from "./pages/CrmPage";
@@ -124,6 +125,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <TicketsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/tickets/:id"
+          element={
+            <ProtectedRoute>
+              <TicketChatPage />
             </ProtectedRoute>
           }
         />
