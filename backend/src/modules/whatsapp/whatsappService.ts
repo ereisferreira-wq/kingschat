@@ -16,6 +16,12 @@ import logger from "../../shared/utils/logger";
 import { handleWhatsAppMessage } from "../chatbot/chatbotService";
 import { emitToCompany } from "../../lib/socket";
 
+const baileysLogger = {
+  ...logger,
+  trace: logger.debug.bind(logger),
+  child: () => baileysLogger,
+};
+
 const sessionsDir = path.resolve(__dirname, "../../../sessions");
 if (!fs.existsSync(sessionsDir)) {
   fs.mkdirSync(sessionsDir, { recursive: true });
@@ -59,11 +65,10 @@ export async function connectWhatsApp(whatsappId: number): Promise<WASocket> {
   const proxyUrl = process.env.WA_PROXY_URL;
 
   const sock = makeWASocket({
-    version: [2, 3000, 1015920675],
     ...(proxyUrl ? { proxy: { url: proxyUrl } } : {}),
     auth: {
       creds: state.creds,
-      keys: makeCacheableSignalKeyStore(state.keys, logger as any),
+      keys: makeCacheableSignalKeyStore(state.keys, baileysLogger),
     },
     printQRInTerminal: false,
     syncFullHistory: false,
@@ -80,6 +85,7 @@ export async function connectWhatsApp(whatsappId: number): Promise<WASocket> {
     transactionOpts: { maxCommitRetries: 10, delayBetweenTriesMs: 3000 },
     msgRetryCounterCache: msgRetryMap,
     connectTimeoutMs: 25_000,
+    logger: baileysLogger,
   });
 
   connections.set(whatsappId, sock);
