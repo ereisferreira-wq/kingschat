@@ -11,7 +11,7 @@ export async function getConfig(req: Request, res: Response) {
       companyId: req.companyId,
       isActive: true,
       aiProvider: "openai",
-      aiModel: "gpt-4o-mini",
+      aiModel: "gpt-3.5-turbo",
       systemPrompt:
         "Você é um assistente de atendimento ao cliente. Responda de forma educada e profissional.",
       temperature: 0.7,

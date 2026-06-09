@@ -12,7 +12,7 @@ export default function ChatbotPage() {
   const [config, setConfig] = useState<any>({
     isActive: true,
     aiProvider: "openai",
-    aiModel: "gpt-4o-mini",
+    aiModel: "gpt-3.5-turbo",
     systemPrompt: "",
     temperature: 0.7,
     maxTokens: 2048,

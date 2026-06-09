@@ -22,7 +22,7 @@ async function callOpenAI(
 ) {
   const openai = getOpenAI(config);
   const completion = await openai.chat.completions.create({
-    model: config.aiModel || "gpt-4o-mini",
+    model: config.aiModel || "gpt-3.5-turbo",
     messages: messages as any,
     temperature: config.temperature || 0.7,
     max_tokens: config.maxTokens || 2048,
