@@ -16,11 +16,18 @@ import logger from "../../shared/utils/logger";
 import { handleWhatsAppMessage } from "../chatbot/chatbotService";
 import { emitToCompany } from "../../lib/socket";
 
-const baileysLogger = {
-  ...logger,
-  trace: logger.debug.bind(logger),
-  child: () => baileysLogger,
-};
+function createBaileysLogger(log: typeof logger) {
+  return new Proxy(log, {
+    get(target, prop) {
+      if (prop === "trace") return target.debug.bind(target);
+      if (prop === "child") return () => baileysLogger;
+      const val = (target as any)[prop];
+      return typeof val === "function" ? val.bind(target) : val;
+    },
+  }) as any;
+}
+
+const baileysLogger = createBaileysLogger(logger);
 
 const sessionsDir = path.resolve(__dirname, "../../../sessions");
 if (!fs.existsSync(sessionsDir)) {
