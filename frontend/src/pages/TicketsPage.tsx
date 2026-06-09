@@ -1,17 +1,25 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import Layout from "../components/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
-import { Button } from "../components/ui/button";
 import api from "../lib/api";
 import { MessageSquare, User, Bot } from "lucide-react";
+import { useSocket } from "../hooks/useSocket";
 
 export default function TicketsPage() {
   const [tickets, setTickets] = useState<any[]>([]);
 
-  useEffect(() => {
+  const loadTickets = useCallback(() => {
     api.get("/tickets?limit=50").then((r) => setTickets(r.data.tickets));
   }, []);
+
+  useEffect(() => {
+    loadTickets();
+  }, [loadTickets]);
+
+  useSocket("ticket:new", loadTickets);
+  useSocket("ticket:updated", loadTickets);
+  useSocket("message:new", loadTickets);
 
   const statusColors: Record<string, "warning" | "success" | "secondary" | "default"> = {
     pending: "warning",

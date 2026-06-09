@@ -20,6 +20,8 @@ import { errorHandler } from "./shared/middleware/errorHandler";
 
 const app = express();
 
+app.set("trust proxy", 1);
+
 const frontendUrl = process.env.FRONTEND_URL || "";
 const corsOrigins = frontendUrl ? frontendUrl.split(",").map(s => s.trim()) : "*";
 

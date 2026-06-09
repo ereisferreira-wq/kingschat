@@ -7,6 +7,7 @@ import Message from "../../shared/database/models/Message";
 import Contact from "../../shared/database/models/Contact";
 import { queryRag, hasDocuments } from "../rag/ragService";
 import logger from "../../shared/utils/logger";
+import { emitToCompany } from "../../lib/socket";
 
 const TRANSFER_FLAG = "[TRANSFERIR]";
 const REMAINING_ATTEMPTS_FLAG = "[TENTATIVAS_RESTANTES:";
@@ -159,16 +160,31 @@ export async function handleWhatsAppMessage(
         botTransferAttempts: 0,
       });
 
+      emitToCompany(companyId, "ticket:new", {
+        ticket: {
+          id: ticket.id,
+          status: ticket.status,
+          isBot: ticket.isBot,
+          updatedAt: ticket.updatedAt,
+          contact: { id: contact.id, name: contact.name, number: contact.number },
+          lastMessage: text,
+        },
+      });
+
       if (config.welcomeMessage) {
         await sock.sendMessage(remoteJid, {
           text: config.welcomeMessage,
         });
-        await Message.create({
+        const msg = await Message.create({
           body: config.welcomeMessage,
           fromMe: true,
           ticketId: ticket.id,
           contactId: contact.id,
           companyId,
+        });
+        emitToCompany(companyId, "message:new", {
+          ticketId: ticket.id,
+          message: { id: msg.id, body: msg.body, fromMe: true, createdAt: msg.createdAt },
         });
       }
     }
@@ -179,6 +195,17 @@ export async function handleWhatsAppMessage(
       ticketId: ticket.id,
       contactId: contact.id,
       companyId,
+    });
+
+    emitToCompany(companyId, "ticket:updated", {
+      ticketId: ticket.id,
+      lastMessage: text,
+      contact: { id: contact.id, name: contact.name, number: contact.number },
+    });
+
+    emitToCompany(companyId, "message:new", {
+      ticketId: ticket.id,
+      message: { body: text, fromMe: false },
     });
 
     // Already transferred to human
