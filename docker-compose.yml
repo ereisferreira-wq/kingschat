@@ -60,6 +60,7 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-me-in-production}
       AI_PROVIDER: ${AI_PROVIDER:-openai}
       AI_MODEL: ${AI_MODEL:-gpt-3.5-turbo}
+      WA_PROXY_URL: ${WA_PROXY_URL:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -81,7 +82,7 @@ services:
       dockerfile: Dockerfile
     restart: always
     ports:
-      - "${FRONTEND_PORT:-80}:80"
+      - "${FRONTEND_PORT:-8080}:80"
     environment:
       VITE_API_URL: ${BACKEND_URL:-https://api.example.com}
     depends_on:
