@@ -45,7 +45,9 @@ export async function isAuth(req: Request, res: Response, next: NextFunction) {
 
     const company = (user as any).company;
     if (company && !company.status && !user.super) {
-      return res.status(403).json({ error: "Company blocked" });
+      if (req.method !== "GET") {
+        return res.status(403).json({ error: "Company blocked" });
+      }
     }
 
     req.user = user;

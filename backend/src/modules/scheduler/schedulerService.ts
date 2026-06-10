@@ -56,6 +56,14 @@ async function executeTask(task: ScheduleTask) {
     customers = await Customer.findAll({
       where: { companyId: task.companyId, status: task.targetStatus },
     });
+  } else if (task.targetType === "by_tags" && task.targetTags) {
+    const tags = task.targetTags.split(",").map((t: string) => t.trim()).filter(Boolean);
+    const allCustomers = await Customer.findAll({ where: { companyId: task.companyId } });
+    customers = allCustomers.filter((c: Customer) => {
+      if (!c.tags) return false;
+      const customerTags = c.tags.split(",").map((t: string) => t.trim().toLowerCase());
+      return tags.some((tag: string) => customerTags.includes(tag.toLowerCase()));
+    });
   }
 
   for (const customer of customers) {

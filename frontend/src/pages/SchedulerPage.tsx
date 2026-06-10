@@ -43,7 +43,7 @@ export default function SchedulerPage() {
     name: "", description: "", triggerType: "after_hours", triggerValue: 1,
     triggerTime: "", messageTemplate: "", repeat: false,
     repeatInterval: 1, repeatIntervalType: "days",
-    approach: "", targetType: "all", targetStatus: "lead",
+    approach: "", targetType: "all", targetStatus: "lead", targetTags: "",
   });
 
   const load = () => {
@@ -66,7 +66,7 @@ export default function SchedulerPage() {
       name: "", description: "", triggerType: "after_hours", triggerValue: 1,
       triggerTime: "", messageTemplate: "", repeat: false,
       repeatInterval: 1, repeatIntervalType: "days",
-      approach: "", targetType: "all", targetStatus: "lead",
+      approach: "", targetType: "all", targetStatus: "lead", targetTags: "",
     });
     setEditing(null);
     setShowForm(false);
@@ -82,7 +82,7 @@ export default function SchedulerPage() {
       repeatInterval: t.repeatInterval || 1,
       repeatIntervalType: t.repeatIntervalType || "days",
       approach: t.approach || "", targetType: t.targetType,
-      targetStatus: t.targetStatus || "lead",
+      targetStatus: t.targetStatus || "lead", targetTags: t.targetTags || "",
     });
     setEditing(t);
     setShowForm(true);
@@ -148,6 +148,7 @@ export default function SchedulerPage() {
 
   const targetLabel = (t: any) => {
     if (t.targetType === "all") return "Todos os clientes";
+    if (t.targetType === "by_tags") return `Tags: ${t.targetTags}`;
     const st: any = { lead: "Leads", qualified: "Qualificados", proposal: "Proposta", negotiation: "Negociação", won: "Fechados", lost: "Perdidos", inactive: "Inativos" };
     return st[t.targetStatus] || t.targetStatus;
   };
@@ -223,6 +224,7 @@ export default function SchedulerPage() {
                     <select className="border rounded-md px-3 py-2 w-full text-sm bg-background" value={form.targetType} onChange={e => setForm({ ...form, targetType: e.target.value })}>
                       <option value="all">Todos os clientes</option>
                       <option value="by_status">Por status</option>
+                      <option value="by_tags">Por tags</option>
                     </select>
                   </div>
                   {form.targetType === "by_status" && (
@@ -237,6 +239,13 @@ export default function SchedulerPage() {
                         <option value="lost">Perdido</option>
                         <option value="inactive">Inativo</option>
                       </select>
+                    </div>
+                  )}
+                  {form.targetType === "by_tags" && (
+                    <div>
+                      <label className="text-sm font-medium block mb-1">Tags alvo</label>
+                      <Input value={form.targetTags} onChange={e => setForm({ ...form, targetTags: e.target.value })} placeholder="vip, lead, promoção" />
+                      <p className="text-xs text-muted-foreground mt-1">Separe por vírgulas. Clientes que tiverem qualquer uma dessas tags serão alvo.</p>
                     </div>
                   )}
                   <div className="flex items-center gap-3">

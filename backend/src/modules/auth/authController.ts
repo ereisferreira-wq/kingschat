@@ -39,10 +39,6 @@ export async function login(req: Request, res: Response) {
     return res.status(403).json({ error: "Account inactive" });
   }
 
-  if (user.company && !user.company.status && !user.super) {
-    return res.status(403).json({ error: "Company blocked. Contact administrator." });
-  }
-
   const valid = await user.checkPassword(password);
   if (!valid) {
     return res.status(401).json({ error: "Invalid credentials" });

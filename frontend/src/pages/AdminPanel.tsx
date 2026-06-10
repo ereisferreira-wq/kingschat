@@ -8,7 +8,7 @@ import { Badge } from "../components/ui/badge";
 import { useAuthStore } from "../stores/authStore";
 import api from "../lib/api";
 import toast from "react-hot-toast";
-import { Search, CheckCircle, XCircle, Building, Mail, Calendar, ArrowUp, Trash2, Users } from "lucide-react";
+import { Search, CheckCircle, XCircle, Building, Mail, Calendar, ArrowUp, Trash2, Users, DollarSign, Save, X } from "lucide-react";
 
 export default function AdminPanel() {
   const { user } = useAuthStore();
@@ -16,6 +16,9 @@ export default function AdminPanel() {
   const [companies, setCompanies] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
+  const [plans, setPlans] = useState<any[]>([]);
+  const [editingPlan, setEditingPlan] = useState<any>(null);
+  const [planForm, setPlanForm] = useState({ name: "", price: "", maxUsers: 1, maxConnections: 1, maxContacts: 500, useChatbot: false });
 
   const load = () => {
     const params = new URLSearchParams();
@@ -25,6 +28,12 @@ export default function AdminPanel() {
   };
 
   useEffect(() => { load() }, [search, filter]);
+
+  const loadPlans = () => {
+    api.get("/admin/plans").then(r => setPlans(r.data.plans)).catch(() => {});
+  };
+
+  useEffect(() => { loadPlans() }, []);
 
   const approve = async (id: number) => {
     try {
@@ -77,6 +86,37 @@ export default function AdminPanel() {
       </Layout>
     );
   }
+
+  const openPlanEdit = (plan: any) => {
+    setEditingPlan(plan);
+    setPlanForm({
+      name: plan.name,
+      price: String(plan.price),
+      maxUsers: plan.maxUsers,
+      maxConnections: plan.maxConnections,
+      maxContacts: plan.maxContacts,
+      useChatbot: plan.useChatbot,
+    });
+  };
+
+  const savePlan = async () => {
+    if (!editingPlan || !planForm.name || !planForm.price) return toast.error("Nome e preço são obrigatórios");
+    try {
+      await api.put(`/plans/${editingPlan.id}`, {
+        name: planForm.name,
+        price: parseFloat(planForm.price),
+        maxUsers: planForm.maxUsers,
+        maxConnections: planForm.maxConnections,
+        maxContacts: planForm.maxContacts,
+        useChatbot: planForm.useChatbot,
+      });
+      toast.success("Plano atualizado!");
+      setEditingPlan(null);
+      loadPlans();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || "Erro ao salvar plano");
+    }
+  };
 
   const pendingUpgrades = companies.filter(c => c.pendingPlanId);
 
@@ -159,6 +199,70 @@ export default function AdminPanel() {
             </CardContent>
           </Card>
         )}
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <DollarSign className="w-5 h-5" />
+              Planos e Preços
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {plans.map(plan => (
+                <div key={plan.id} className="border rounded-lg p-4">
+                  {editingPlan?.id === plan.id ? (
+                    <div className="space-y-3">
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <div>
+                          <label className="text-xs font-medium block mb-1">Nome</label>
+                          <Input value={planForm.name} onChange={e => setPlanForm({ ...planForm, name: e.target.value })} />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium block mb-1">Preço (R$)</label>
+                          <Input value={planForm.price} onChange={e => setPlanForm({ ...planForm, price: e.target.value })} />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium block mb-1">Usuários</label>
+                          <Input type="number" min={1} value={planForm.maxUsers} onChange={e => setPlanForm({ ...planForm, maxUsers: parseInt(e.target.value) || 1 })} />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium block mb-1">WhatsApps</label>
+                          <Input type="number" min={1} value={planForm.maxConnections} onChange={e => setPlanForm({ ...planForm, maxConnections: parseInt(e.target.value) || 1 })} />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium block mb-1">Contatos</label>
+                          <Input type="number" min={1} value={planForm.maxContacts} onChange={e => setPlanForm({ ...planForm, maxContacts: parseInt(e.target.value) || 500 })} />
+                        </div>
+                        <div className="flex items-center gap-2 pt-5">
+                          <input type="checkbox" id="planChatbot" checked={planForm.useChatbot} onChange={e => setPlanForm({ ...planForm, useChatbot: e.target.checked })} className="rounded" />
+                          <label htmlFor="planChatbot" className="text-sm">Chatbot IA</label>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={savePlan}><Save className="w-3 h-3 mr-1" /> Salvar</Button>
+                        <Button size="sm" variant="outline" onClick={() => setEditingPlan(null)}>Cancelar</Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">{plan.name}</p>
+                        <p className="text-2xl font-bold">R$ {Number(plan.price).toFixed(2)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {plan.maxUsers} usuário(s) · {plan.maxConnections} WhatsApp(s) · {plan.maxContacts} contatos · {plan.useChatbot ? "Chatbot IA" : "Sem chatbot"}
+                        </p>
+                      </div>
+                      <Button size="sm" variant="outline" onClick={() => openPlanEdit(plan)}>
+                        Editar
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="flex gap-3 flex-wrap">
           <div className="relative flex-1 max-w-sm">

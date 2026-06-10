@@ -1,8 +1,8 @@
 import { Router } from "express";
 import multer from "multer";
-import { isAuth, isAdmin, isSuper } from "../../shared/middleware/auth";
+import { isAuth, isAdmin } from "../../shared/middleware/auth";
 import {
-  listPlans, createPlan, updatePlan,
+  listPlans, listAllPlans, createPlan, updatePlan,
   getMySubscription, updateSubscription,
   getUpgradeCost, requestUpgrade,
   approveUpgrade, rejectUpgrade, getPlanUsageEndpoint,
@@ -37,8 +37,9 @@ const upgradeUpload = multer({
 const subscriptionRoutes = Router();
 
 subscriptionRoutes.get("/plans", listPlans);
-subscriptionRoutes.post("/plans", isAuth, isSuper, createPlan);
-subscriptionRoutes.put("/plans/:id", isAuth, isSuper, updatePlan);
+subscriptionRoutes.get("/admin/plans", isAuth, isAdmin, listAllPlans);
+subscriptionRoutes.post("/plans", isAuth, isAdmin, createPlan);
+subscriptionRoutes.put("/plans/:id", isAuth, isAdmin, updatePlan);
 
 subscriptionRoutes.get("/subscription", isAuth, getMySubscription);
 subscriptionRoutes.put("/subscription", isAuth, updateSubscription);

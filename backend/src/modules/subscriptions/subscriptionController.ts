@@ -9,6 +9,11 @@ export async function listPlans(req: Request, res: Response) {
   res.json({ plans });
 }
 
+export async function listAllPlans(req: Request, res: Response) {
+  const plans = await Plan.findAll({ order: [["price", "ASC"]] });
+  res.json({ plans });
+}
+
 export async function createPlan(req: Request, res: Response) {
   const data = req.body;
   const plan = await Plan.create(data);

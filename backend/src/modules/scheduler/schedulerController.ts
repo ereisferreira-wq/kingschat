@@ -24,7 +24,7 @@ export async function createTask(req: Request, res: Response) {
   const {
     name, description, triggerType, triggerValue, triggerTime,
     messageTemplate, repeat, repeatInterval, repeatIntervalType,
-    approach, targetType, targetStatus,
+    approach, targetType, targetStatus, targetTags,
   } = req.body;
 
   if (!name || !triggerType || !messageTemplate) {
@@ -46,6 +46,7 @@ export async function createTask(req: Request, res: Response) {
     approach,
     targetType: targetType || "all",
     targetStatus,
+    targetTags,
     isActive: true,
     nextRun,
     createdBy: req.userId,

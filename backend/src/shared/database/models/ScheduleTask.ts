@@ -47,6 +47,9 @@ class ScheduleTask extends Model<ScheduleTask> {
   @Column(DataType.STRING)
   targetStatus: string;
 
+  @Column(DataType.STRING)
+  targetTags: string;
+
   @Default(true)
   @Column(DataType.BOOLEAN)
   isActive: boolean;

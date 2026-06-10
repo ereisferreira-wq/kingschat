@@ -18,7 +18,6 @@ export default function ChatbotPage() {
     maxTokens: 2048,
     apiKey: "",
     ollamaBaseUrl: "http://localhost:11434",
-    useRag: true,
     welcomeMessage: "",
     farewellMessage: "",
     transferToHuman: false,

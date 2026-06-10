@@ -54,8 +54,7 @@ export default function SignupPage() {
       localStorage.setItem("token", res.data.token);
       localStorage.setItem("refreshToken", res.data.refreshToken);
       useAuthStore.getState().loadUser();
-      await new Promise((r) => setTimeout(r, 300));
-      const user = useAuthStore.getState().user || res.data.user;
+      const user = res.data.user;
       if (user?.company?.status) {
         toast.success("Conta criada com sucesso!");
         navigate("/dashboard");

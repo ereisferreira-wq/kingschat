@@ -7,6 +7,7 @@ import makeWASocket, {
   isJidBroadcast,
   jidNormalizedUser,
   makeCacheableSignalKeyStore,
+  proto,
   type CacheStore,
 } from "@whiskeysockets/baileys";
 import * as fs from "fs";
@@ -14,6 +15,9 @@ import * as path from "path";
 import Whatsapp from "../../shared/database/models/Whatsapp";
 import logger from "../../shared/utils/logger";
 import { handleWhatsAppMessage } from "../chatbot/chatbotService";
+import Ticket from "../../shared/database/models/Ticket";
+import Message from "../../shared/database/models/Message";
+import Contact from "../../shared/database/models/Contact";
 import { emitToCompany } from "../../lib/socket";
 
 function createBaileysLogger(log: typeof logger) {
@@ -60,6 +64,59 @@ function emitSession(whatsapp: Whatsapp) {
       companyId: whatsapp.companyId,
     },
   });
+}
+
+async function handleMyOwnMessage(
+  whatsappId: number,
+  companyId: number,
+  msg: proto.IWebMessageInfo,
+  sock: WASocket
+) {
+  try {
+    const text =
+      msg.message?.conversation ||
+      msg.message?.extendedTextMessage?.text ||
+      "";
+    if (!text) return;
+
+    const remoteJid = msg.key.remoteJid;
+    if (!remoteJid || remoteJid.endsWith("@g.us")) return;
+
+    const number = remoteJid.replace("@s.whatsapp.net", "");
+    const contact = await Contact.findOne({ where: { number, companyId } });
+    if (!contact) return;
+
+    const ticket = await Ticket.findOne({
+      where: { contactId: contact.id, companyId, status: ["pending", "open"] },
+    });
+    if (!ticket) return;
+
+    const newMsg = await Message.create({
+      body: text,
+      fromMe: true,
+      ticketId: ticket.id,
+      contactId: contact.id,
+      companyId,
+    });
+
+    await ticket.update({ lastMessage: text, isBot: false, status: "open" });
+
+    emitToCompany(companyId, "message:new", {
+      ticketId: ticket.id,
+      message: { id: newMsg.id, body: text, fromMe: true, createdAt: newMsg.createdAt },
+    });
+
+    emitToCompany(companyId, "ticket:updated", {
+      ticketId: ticket.id,
+      lastMessage: text,
+      isBot: false,
+      contact: { id: contact.id, name: contact.name, number: contact.number },
+    });
+
+    logger.info(`Human replied from phone on ticket ${ticket.id} — AI stopped`);
+  } catch (error) {
+    logger.error("Error handling own message:", error);
+  }
 }
 
 export async function connectWhatsApp(whatsappId: number): Promise<WASocket> {
@@ -171,6 +228,9 @@ export async function connectWhatsApp(whatsappId: number): Promise<WASocket> {
     for (const message of msg.messages) {
       if (!message.key.fromMe && message.message) {
         await handleWhatsAppMessage(whatsappId, whatsapp.companyId, message, sock);
+      }
+      if (message.key.fromMe && message.message) {
+        await handleMyOwnMessage(whatsappId, whatsapp.companyId, message, sock);
       }
     }
   });
