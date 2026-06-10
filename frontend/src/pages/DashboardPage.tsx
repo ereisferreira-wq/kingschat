@@ -5,7 +5,7 @@ import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import api from "../lib/api";
 import toast from "react-hot-toast";
-import { Smartphone, MessageSquare, FileText, TrendingUp, ArrowUp, Users } from "lucide-react";
+import { Smartphone, MessageSquare, TrendingUp, ArrowUp, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 export default function DashboardPage() {
@@ -17,15 +17,13 @@ export default function DashboardPage() {
     Promise.all([
       api.get("/whatsapp").then((r) => r.data.whatsapps),
       api.get("/tickets?limit=5").then((r) => r.data),
-      api.get("/documents").then((r) => r.data.documents),
       api.get("/plan-usage").then((r) => setUsage(r.data)).catch(() => {}),
     ])
-      .then(([whatsapps, tickets, documents]) => {
+      .then(([whatsapps, tickets]) => {
         setStats({
           whatsapps: whatsapps.length,
           connected: whatsapps.filter((w: any) => w.status === "CONNECTED").length,
           tickets: tickets.total || 0,
-          documents: documents.length,
         });
       })
       .catch(() => toast.error("Erro ao carregar dados do dashboard"));
@@ -37,7 +35,6 @@ export default function DashboardPage() {
   const usageBars = usage ? [
     { label: "Contatos", current: usage.limits.contacts.current, max: usage.limits.contacts.max },
     { label: "WhatsApp", current: usage.limits.whatsapps.current, max: usage.limits.whatsapps.max },
-    { label: "Documentos", current: usage.limits.documents.current, max: usage.limits.documents.max },
   ] : [];
 
   const cards = [
@@ -56,14 +53,6 @@ export default function DashboardPage() {
       icon: MessageSquare,
       color: "text-blue-600",
       bg: "bg-blue-50 dark:bg-blue-950",
-    },
-    {
-      title: "Documentos",
-      value: stats.documents || 0,
-      sub: "PDFs para IA",
-      icon: FileText,
-      color: "text-purple-600",
-      bg: "bg-purple-50 dark:bg-purple-950",
     },
     {
       title: "Status do Bot",
@@ -157,14 +146,8 @@ export default function DashboardPage() {
                 <span>Conecte seu WhatsApp</span>
               </li>
               <li className="flex items-center gap-3">
-                <Badge variant={stats.documents > 0 ? "success" : "warning"}>
-                  {stats.documents > 0 ? "OK" : "2"}
-                </Badge>
-                <span>Envie PDFs para treinar a IA</span>
-              </li>
-              <li className="flex items-center gap-3">
-                <Badge variant={stats.connected > 0 && stats.documents > 0 ? "success" : "warning"}>
-                  {stats.connected > 0 && stats.documents > 0 ? "OK" : "3"}
+                <Badge variant={stats.connected > 0 ? "success" : "warning"}>
+                  {stats.connected > 0 ? "OK" : "2"}
                 </Badge>
                 <span>Configure o chatbot no menu "Chatbot IA"</span>
               </li>
