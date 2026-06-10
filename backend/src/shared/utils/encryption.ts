@@ -5,12 +5,20 @@ const KEY_LENGTH = 32;
 const IV_LENGTH = 16;
 const TAG_LENGTH = 16;
 
+let cachedKey: Buffer | null = null;
+
 function getEncryptionKey(): Buffer {
-  const key = process.env.ENCRYPTION_KEY;
+  if (cachedKey) return cachedKey;
+  let key = process.env.ENCRYPTION_KEY;
   if (!key || key === "kmenu-encryption-key-change-in-production-32b" || key.length < 16) {
-    throw new Error("ENCRYPTION_KEY environment variable is not set or is insecure");
+    key = crypto.randomBytes(32).toString("hex");
+    process.env.ENCRYPTION_KEY = key;
+    console.log(`[ENCRYPTION] Auto-generated key: ${key}`);
+    console.log(`[ENCRYPTION] Add this to your .env file to keep it persistent:`);
+    console.log(`[ENCRYPTION] ENCRYPTION_KEY=${key}`);
   }
-  return crypto.scryptSync(key, crypto.randomBytes(16).toString("hex"), KEY_LENGTH);
+  cachedKey = crypto.scryptSync(key, crypto.randomBytes(16).toString("hex"), KEY_LENGTH);
+  return cachedKey;
 }
 
 export function encrypt(text: string): string {
