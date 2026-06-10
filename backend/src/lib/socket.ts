@@ -5,9 +5,14 @@ import logger from "../shared/utils/logger";
 let io: SocketIOServer;
 
 export function initSocket(httpServer: HttpServer) {
+  const frontendUrl = process.env.FRONTEND_URL || "";
+  const corsOrigins = frontendUrl
+    ? frontendUrl.split(",").map(s => s.trim())
+    : ["http://localhost:5173", "http://localhost:8080"];
+
   io = new SocketIOServer(httpServer, {
     cors: {
-      origin: "*",
+      origin: corsOrigins,
       methods: ["GET", "POST"],
     },
   });

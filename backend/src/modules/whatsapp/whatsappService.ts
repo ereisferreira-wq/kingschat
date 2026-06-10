@@ -20,6 +20,9 @@ import Message from "../../shared/database/models/Message";
 import Contact from "../../shared/database/models/Contact";
 import { emitToCompany } from "../../lib/socket";
 
+const MAX_RECONNECT_ATTEMPTS = 15;
+const BASE_RECONNECT_DELAY_MS = 2000;
+
 function createBaileysLogger(log: typeof logger) {
   return new Proxy(log, {
     get(target, prop) {
@@ -40,6 +43,8 @@ if (!fs.existsSync(sessionsDir)) {
 
 const connections = new Map<number, WASocket>();
 const retriesQrCode = new Map<number, number>();
+const pendingConnections = new Map<number, Promise<WASocket>>();
+const reconnectAttempts = new Map<number, number>();
 
 const retryCache = new Map<string, number>();
 const msgRetryMap: CacheStore = {
@@ -64,6 +69,13 @@ function emitSession(whatsapp: Whatsapp) {
       companyId: whatsapp.companyId,
     },
   });
+}
+
+function cleanupSession(whatsappId: number) {
+  connections.delete(whatsappId);
+  pendingConnections.delete(whatsappId);
+  retriesQrCode.delete(whatsappId);
+  reconnectAttempts.delete(whatsappId);
 }
 
 async function handleMyOwnMessage(
@@ -120,6 +132,21 @@ async function handleMyOwnMessage(
 }
 
 export async function connectWhatsApp(whatsappId: number): Promise<WASocket> {
+  const existing = pendingConnections.get(whatsappId);
+  if (existing) return existing;
+
+  const promise = doConnectWhatsApp(whatsappId);
+  pendingConnections.set(whatsappId, promise);
+
+  try {
+    const sock = await promise;
+    return sock;
+  } finally {
+    pendingConnections.delete(whatsappId);
+  }
+}
+
+async function doConnectWhatsApp(whatsappId: number): Promise<WASocket> {
   const whatsapp = await Whatsapp.findByPk(whatsappId);
   if (!whatsapp) throw new Error("WhatsApp not found");
 
@@ -168,8 +195,7 @@ export async function connectWhatsApp(whatsappId: number): Promise<WASocket> {
         fs.rmSync(sessionPath, { recursive: true, force: true });
         sock.ev.removeAllListeners("connection.update");
         sock.ws?.close();
-        connections.delete(whatsappId);
-        retriesQrCode.delete(whatsappId);
+        cleanupSession(whatsappId);
         emitSession(whatsapp);
       } else {
         await whatsapp.update({ qrcode: qr, status: "QRCODE" });
@@ -187,27 +213,38 @@ export async function connectWhatsApp(whatsappId: number): Promise<WASocket> {
         logger.warn(`WhatsApp ${whatsappId} forbidden (403), clearing session`);
         await whatsapp.update({ status: "DISCONNECTED", qrcode: "" });
         fs.rmSync(sessionPath, { recursive: true, force: true });
-        connections.delete(whatsappId);
-        retriesQrCode.delete(whatsappId);
+        cleanupSession(whatsappId);
         emitSession(whatsapp);
         return;
       }
 
       if (!isLoggedOut) {
-        logger.info(`WhatsApp ${whatsappId} reconnecting in 2s...`);
+        const attempt = (reconnectAttempts.get(whatsappId) || 0) + 1;
+        reconnectAttempts.set(whatsappId, attempt);
+
+        if (attempt > MAX_RECONNECT_ATTEMPTS) {
+          logger.error(`WhatsApp ${whatsappId} max reconnection attempts (${MAX_RECONNECT_ATTEMPTS}) reached. Giving up.`);
+          await whatsapp.update({ status: "DISCONNECTED", qrcode: "" });
+          cleanupSession(whatsappId);
+          emitSession(whatsapp);
+          return;
+        }
+
+        const delay = Math.min(BASE_RECONNECT_DELAY_MS * Math.pow(2, attempt - 1), 60000);
+        logger.info(`WhatsApp ${whatsappId} reconnecting in ${delay}ms (attempt ${attempt}/${MAX_RECONNECT_ATTEMPTS})`);
         connections.delete(whatsappId);
-        setTimeout(() => connectWhatsApp(whatsappId), 2000);
+        setTimeout(() => connectWhatsApp(whatsappId), delay);
         return;
       }
 
       await whatsapp.update({ status: "DISCONNECTED", qrcode: "" });
-      connections.delete(whatsappId);
-      retriesQrCode.delete(whatsappId);
+      cleanupSession(whatsappId);
       logger.info(`Whatsapp ${whatsappId} logged out`);
       emitSession(whatsapp);
     }
 
     if (connection === "open") {
+      reconnectAttempts.delete(whatsappId);
       const number = sock.user?.id
         ? jidNormalizedUser(sock.user.id).split("@")[0]
         : "";
@@ -236,6 +273,20 @@ export async function connectWhatsApp(whatsappId: number): Promise<WASocket> {
   });
 
   return sock;
+}
+
+export async function restoreAllSessions() {
+  try {
+    const instances = await Whatsapp.findAll({ where: { status: "CONNECTED" } });
+    logger.info(`Restoring ${instances.length} WhatsApp session(s)...`);
+    for (const instance of instances) {
+      connectWhatsApp(instance.id).catch((err) => {
+        logger.error(`Failed to restore WhatsApp ${instance.id}: ${err.message}`);
+      });
+    }
+  } catch (error) {
+    logger.error("Error restoring WhatsApp sessions:", error);
+  }
 }
 
 export async function requestPairingCode(whatsappId: number, phoneNumber: string) {

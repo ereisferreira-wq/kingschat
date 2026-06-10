@@ -12,7 +12,7 @@ export default function ChatbotPage() {
   const [config, setConfig] = useState<any>({
     isActive: true,
     aiProvider: "openai",
-    aiModel: "gpt-3.5-turbo",
+    aiModel: "gpt-4o",
     systemPrompt: "",
     temperature: 0.7,
     maxTokens: 2048,
@@ -82,14 +82,36 @@ export default function ChatbotPage() {
                 </div>
                 <div>
                   <label className="text-sm font-medium block mb-1">Modelo</label>
-                  <Input
+                  <select
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     value={config.aiModel}
                     onChange={(e) => setConfig({ ...config, aiModel: e.target.value })}
-                    placeholder="gpt-3.5-turbo / llama3"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    OpenAI: gpt-3.5-turbo, gpt-4 | Ollama: llama3, mistral
-                  </p>
+                  >
+                    {config.aiProvider === "openai" ? (
+                      <>
+                        <option value="gpt-5">GPT-5</option>
+                        <option value="gpt-4o">GPT-4o</option>
+                        <option value="gpt-4o-mini">GPT-4o Mini</option>
+                        <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                        <option value="gpt-4">GPT-4</option>
+                        <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                        <option value="o1">o1</option>
+                        <option value="o1-mini">o1 Mini</option>
+                        <option value="o3-mini">o3 Mini</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="llama3">Llama 3</option>
+                        <option value="llama3.1">Llama 3.1</option>
+                        <option value="llama3.2">Llama 3.2</option>
+                        <option value="mistral">Mistral</option>
+                        <option value="mixtral">Mixtral</option>
+                        <option value="gemma2">Gemma 2</option>
+                        <option value="phi3">Phi-3</option>
+                        <option value="qwen2">Qwen 2</option>
+                      </>
+                    )}
+                  </select>
                 </div>
                 {config.aiProvider === "openai" && (
                   <div>

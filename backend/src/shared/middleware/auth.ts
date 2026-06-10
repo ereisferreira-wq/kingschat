@@ -30,9 +30,14 @@ export async function isAuth(req: Request, res: Response, next: NextFunction) {
   }
 
   try {
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret || jwtSecret === "secret" || jwtSecret.length < 16) {
+      return res.status(500).json({ error: "JWT_SECRET not properly configured" });
+    }
+
     const decoded = jwt.verify(
       parts[1],
-      process.env.JWT_SECRET || "secret"
+      jwtSecret
     ) as JwtPayload;
 
     const user = await User.findByPk(decoded.id, {

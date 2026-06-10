@@ -5,7 +5,7 @@ import Whatsapp from "./Whatsapp";
 import Ticket from "./Ticket";
 import Contact from "./Contact";
 import Message from "./Message";
-import Document from "./Document";
+
 import ChatbotConfig from "./ChatbotConfig";
 import Subscription from "./Subscription";
 import Customer from "./Customer";
@@ -20,7 +20,6 @@ const models = {
   Ticket,
   Contact,
   Message,
-  Document,
   ChatbotConfig,
   Subscription,
   Customer,
@@ -37,7 +36,6 @@ export {
   Ticket,
   Contact,
   Message,
-  Document,
   ChatbotConfig,
   Subscription,
   Customer,

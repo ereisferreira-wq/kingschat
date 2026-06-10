@@ -11,6 +11,7 @@ import User from "./shared/database/models/User";
 import { startScheduler } from "./modules/scheduler/schedulerService";
 import { startLicenseService } from "./modules/company/licenseService";
 import { initSocket } from "./lib/socket";
+import { restoreAllSessions } from "./modules/whatsapp/whatsappService";
 import fs from "fs";
 import path from "path";
 
@@ -147,6 +148,7 @@ async function startup() {
 
     startScheduler();
     startLicenseService();
+    restoreAllSessions();
   } catch (error) {
     logger.error("Startup error:", error);
     process.exit(1);

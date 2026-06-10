@@ -4,7 +4,7 @@ import Company from "../../shared/database/models/Company";
 import Message from "../../shared/database/models/Message";
 import Contact from "../../shared/database/models/Contact";
 import Ticket from "../../shared/database/models/Ticket";
-import Document from "../../shared/database/models/Document";
+
 import ChatbotConfig from "../../shared/database/models/ChatbotConfig";
 import ScheduleTask from "../../shared/database/models/ScheduleTask";
 import Whatsapp from "../../shared/database/models/Whatsapp";
@@ -54,10 +54,6 @@ export async function deleteCompanyData(req: Request, res: Response) {
     });
 
     await Contact.destroy({
-      where: { companyId: user.companyId },
-    });
-
-    await Document.destroy({
       where: { companyId: user.companyId },
     });
 

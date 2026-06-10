@@ -12,7 +12,7 @@ import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import DashboardPage from "./pages/DashboardPage";
 import WhatsAppPage from "./pages/WhatsAppPage";
-import DocumentsPage from "./pages/DocumentsPage";
+
 import ChatbotPage from "./pages/ChatbotPage";
 import TicketsPage from "./pages/TicketsPage";
 import TicketChatPage from "./pages/TicketChatPage";
@@ -101,14 +101,6 @@ export default function App() {
           element={
             <ProtectedRoute>
               <WhatsAppPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/documents"
-          element={
-            <ProtectedRoute>
-              <DocumentsPage />
             </ProtectedRoute>
           }
         />

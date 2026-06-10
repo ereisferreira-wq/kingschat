@@ -5,15 +5,31 @@ import User from "../../shared/database/models/User";
 import Company from "../../shared/database/models/Company";
 import Plan from "../../shared/database/models/Plan";
 
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret || secret === "secret" || secret.length < 16) {
+    throw new Error("JWT_SECRET environment variable is not set or is insecure");
+  }
+  return secret;
+}
+
+function getJwtRefreshSecret(): string {
+  const secret = process.env.JWT_REFRESH_SECRET;
+  if (!secret || secret === "refresh_secret" || secret.length < 16) {
+    throw new Error("JWT_REFRESH_SECRET environment variable is not set or is insecure");
+  }
+  return secret;
+}
+
 function generateToken(user: User) {
   const payload = { id: user.id, companyId: user.companyId, role: user.role };
   return {
-    token: jwt.sign(payload, process.env.JWT_SECRET || "secret", {
+    token: jwt.sign(payload, getJwtSecret(), {
       expiresIn: "24h",
     }),
     refreshToken: jwt.sign(
       payload,
-      process.env.JWT_REFRESH_SECRET || "refresh_secret",
+      getJwtRefreshSecret(),
       { expiresIn: "7d" }
     ),
   };
@@ -154,7 +170,7 @@ export async function refreshToken(req: Request, res: Response) {
   try {
     const decoded = jwt.verify(
       refreshToken,
-      process.env.JWT_REFRESH_SECRET || "refresh_secret"
+      getJwtRefreshSecret()
     ) as any;
 
     const user = await User.findByPk(decoded.id, {
@@ -286,11 +302,11 @@ export async function getUsers(req: Request, res: Response) {
 
 export async function pixInfo(req: Request, res: Response) {
   res.json({
-    bank: "336 - Banco C6 S.A.",
-    agency: "0001",
-    account: "37632361-2",
-    cnpj: "41.543.276/0001-01",
-    name: "41.543.276 ERIK REIS FERREIRA",
-    pixKey: "41.543.276/0001-01",
+    bank: process.env.PIX_BANK || "",
+    agency: process.env.PIX_AGENCY || "",
+    account: process.env.PIX_ACCOUNT || "",
+    cnpj: process.env.PIX_CNPJ || "",
+    name: process.env.PIX_NAME || "",
+    pixKey: process.env.PIX_KEY || "",
   });
 }

@@ -11,7 +11,7 @@ import authRoutes from "./modules/auth/authRoutes";
 import whatsappRoutes from "./modules/whatsapp/whatsappRoutes";
 import chatbotRoutes from "./modules/chatbot/chatbotRoutes";
 import ticketsRoutes from "./modules/tickets/ticketsRoutes";
-import documentsRoutes from "./modules/documents/documentsRoutes";
+
 import subscriptionRoutes from "./modules/subscriptions/subscriptionRoutes";
 import companyRoutes from "./modules/company/companyRoutes";
 import crmRoutes from "./modules/crm/crmRoutes";
@@ -72,7 +72,6 @@ app.use(apiLimiter);
 app.use(whatsappRoutes);
 app.use(chatbotRoutes);
 app.use(ticketsRoutes);
-app.use(documentsRoutes);
 app.use(subscriptionRoutes);
 app.use(companyRoutes);
 app.use(crmRoutes);

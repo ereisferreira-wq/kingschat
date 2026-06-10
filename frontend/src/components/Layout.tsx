@@ -6,7 +6,6 @@ import {
   Crown,
   MessageSquare,
   Smartphone,
-  FileText,
   Bot,
   LayoutDashboard,
   LogOut,
@@ -27,7 +26,7 @@ const navItems = [
   { icon: Smartphone, label: "WhatsApp", path: "/whatsapp" },
   { icon: Users, label: "CRM", path: "/crm" },
   { icon: Clock, label: "Agendador", path: "/scheduler" },
-  { icon: FileText, label: "Documentos", path: "/documents" },
+
   { icon: Bot, label: "Chatbot IA", path: "/chatbot" },
   { icon: MessageSquare, label: "Tickets", path: "/tickets" },
   { icon: CreditCard, label: "Assinatura", path: "/subscription" },
