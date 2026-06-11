@@ -69,7 +69,8 @@ async function getAiResponse(
   message: string,
   config: ChatbotConfig,
   companyId: number,
-  remainingAttempts: number
+  remainingAttempts: number,
+  history?: { role: string; content: string }[]
 ) {
   const transferInstruction = config.transferToHuman
     ? `\n\nIMPORTANTE: Se você NÃO souber responder a pergunta do cliente, ou se estiver fora do seu conhecimento, escreva "${TRANSFER_FLAG}" no final da sua resposta. O cliente ainda tem ${remainingAttempts} chance(s) antes de ser transferido para um humano. Se ele já usou todas as chances, escreva "${TRANSFER_FLAG}${REMAINING_ATTEMPTS_FLAG}0]" para forçar a transferência.`
@@ -87,10 +88,15 @@ async function getAiResponse(
     context = `\n\nBase de conhecimento da empresa:\n${config.knowledgeBase}\n\nUse ESSAS INFORMAÇÕES ACIMA para responder. Se a informação não for suficiente para responder, avise o cliente e adicione "${TRANSFER_FLAG}" ao final.`;
   }
 
-  const messages = [
+  const messages: { role: string; content: string }[] = [
     { role: "system", content: systemPrompt + context },
-    { role: "user", content: message },
   ];
+
+  if (history) {
+    messages.push(...history);
+  }
+
+  messages.push({ role: "user", content: message });
 
   if (config.aiProvider === "ollama") {
     return callOllama(messages, config);
@@ -222,13 +228,27 @@ export async function handleWhatsAppMessage(
       return;
     }
 
-    // Get AI response
+    // Get AI response with conversation history (last 48h)
     const remainingAttempts = Math.max(0, maxAttempts - attempts);
+    const historyCutoff = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    const recentMessages = await Message.findAll({
+      where: { ticketId: ticket.id, companyId },
+      attributes: ["body", "fromMe", "createdAt"],
+      order: [["createdAt", "ASC"]],
+    });
+    const history = recentMessages
+      .filter((m) => new Date(m.createdAt) >= historyCutoff)
+      .slice(-20)
+      .map((m) => ({
+        role: m.fromMe ? "assistant" : "user",
+        content: m.body,
+      }));
     const rawResponse = await getAiResponse(
       text,
       config,
       companyId,
-      remainingAttempts
+      remainingAttempts,
+      history
     );
 
     // Check if AI flagged for transfer
