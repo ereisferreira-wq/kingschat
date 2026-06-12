@@ -35,7 +35,7 @@ async function callOllama(
   config: ChatbotConfig
 ) {
   const baseUrl = config.ollamaBaseUrl || process.env.OLLAMA_BASE_URL || "http://localhost:11434";
-  const model = process.env.OLLAMA_MODEL || "llama3";
+  const model = config.aiModel || process.env.OLLAMA_MODEL || "llama3";
 
   const response = await axios.post(`${baseUrl}/api/chat`, {
     model,

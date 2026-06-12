@@ -6,7 +6,7 @@ import { Input } from "../components/ui/input";
 import { Badge } from "../components/ui/badge";
 import api from "../lib/api";
 import toast from "react-hot-toast";
-import { Bot, Save, Users } from "lucide-react";
+import { Bot, Save, Users, RefreshCw } from "lucide-react";
 
 export default function ChatbotPage() {
   const [config, setConfig] = useState<any>({
@@ -26,6 +26,8 @@ export default function ChatbotPage() {
     maxTransferAttempts: 3,
   });
   const [loading, setLoading] = useState(true);
+  const [ollamaModels, setOllamaModels] = useState<string[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
 
   useEffect(() => {
     api
@@ -34,6 +36,24 @@ export default function ChatbotPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  const fetchOllamaModels = async () => {
+    setLoadingModels(true);
+    try {
+      const r = await api.get("/chatbot/models");
+      setOllamaModels(r.data.models || []);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || "Erro ao buscar modelos");
+    } finally {
+      setLoadingModels(false);
+    }
+  };
+
+  useEffect(() => {
+    if (config.aiProvider === "ollama") {
+      fetchOllamaModels();
+    }
+  }, [config.aiProvider]);
 
   const save = async () => {
     try {
@@ -82,36 +102,44 @@ export default function ChatbotPage() {
                 </div>
                 <div>
                   <label className="text-sm font-medium block mb-1">Modelo</label>
-                  <select
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    value={config.aiModel}
-                    onChange={(e) => setConfig({ ...config, aiModel: e.target.value })}
-                  >
-                    {config.aiProvider === "openai" ? (
-                      <>
-                        <option value="gpt-5">GPT-5</option>
-                        <option value="gpt-4o">GPT-4o</option>
-                        <option value="gpt-4o-mini">GPT-4o Mini</option>
-                        <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                        <option value="gpt-4">GPT-4</option>
-                        <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                        <option value="o1">o1</option>
-                        <option value="o1-mini">o1 Mini</option>
-                        <option value="o3-mini">o3 Mini</option>
-                      </>
-                    ) : (
-                      <>
-                        <option value="llama3">Llama 3</option>
-                        <option value="llama3.1">Llama 3.1</option>
-                        <option value="llama3.2">Llama 3.2</option>
-                        <option value="mistral">Mistral</option>
-                        <option value="mixtral">Mixtral</option>
-                        <option value="gemma2">Gemma 2</option>
-                        <option value="phi3">Phi-3</option>
-                        <option value="qwen2">Qwen 2</option>
-                      </>
+                  <div className="flex gap-2">
+                    <select
+                      className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={config.aiModel}
+                      onChange={(e) => setConfig({ ...config, aiModel: e.target.value })}
+                    >
+                      {config.aiProvider === "openai" ? (
+                        <>
+                          <option value="gpt-5">GPT-5</option>
+                          <option value="gpt-4o">GPT-4o</option>
+                          <option value="gpt-4o-mini">GPT-4o Mini</option>
+                          <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                          <option value="gpt-4">GPT-4</option>
+                          <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                          <option value="o1">o1</option>
+                          <option value="o1-mini">o1 Mini</option>
+                          <option value="o3-mini">o3 Mini</option>
+                        </>
+                      ) : ollamaModels.length > 0 ? (
+                        ollamaModels.map((m) => (
+                          <option key={m} value={m}>{m}</option>
+                        ))
+                      ) : (
+                        <option value="">{loadingModels ? "Carregando..." : "Nenhum modelo encontrado"}</option>
+                      )}
+                    </select>
+                    {config.aiProvider === "ollama" && (
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={fetchOllamaModels}
+                        disabled={loadingModels}
+                        title="Atualizar modelos"
+                      >
+                        <RefreshCw className={`w-4 h-4 ${loadingModels ? "animate-spin" : ""}`} />
+                      </Button>
                     )}
-                  </select>
+                  </div>
                 </div>
                 {config.aiProvider === "openai" && (
                   <div>
