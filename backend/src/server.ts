@@ -129,8 +129,13 @@ async function startup() {
     await db.authenticate();
     logger.info("Database connected");
 
-    await db.sync({ alter: true });
+    await db.sync();
     logger.info("Database synced");
+
+    const qi = db.getQueryInterface();
+    await qi.addColumn("chatbot_configs", "extractionFields", { type: "TEXT", defaultValue: "nome, cidade, placa" }).catch(() => {});
+    await qi.addColumn("contacts", "customFields", { type: "TEXT" }).catch(() => {});
+    await qi.addColumn("chatbot_configs", "ollamaBaseUrl", { type: "TEXT", defaultValue: "http://localhost:11434" }).catch(() => {});
 
     await seedPlans();
     await seedAdminUser();

@@ -36,7 +36,7 @@ async function callOllama(
   messages: { role: string; content: string }[],
   config: ChatbotConfig
 ) {
-  const baseUrl = config.ollamaBaseUrl || process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+  const baseUrl = process.env.OLLAMA_BASE_URL || config.ollamaBaseUrl || "http://localhost:11434";
   const model = config.aiModel || process.env.OLLAMA_MODEL || "llama3";
 
   logger.info(`callOllama: ${model} @ ${baseUrl}/api/chat`);
