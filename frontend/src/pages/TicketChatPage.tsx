@@ -6,7 +6,7 @@ import { Button } from "../components/ui/button";
 import api from "../lib/api";
 import toast from "react-hot-toast";
 import { useSocket } from "../hooks/useSocket";
-import useAuthStore from "../stores/authStore";
+import { useAuthStore } from "../stores/authStore";
 import {
   ArrowLeft, Send, Bot, User, Phone, Loader2, Save, XCircle, UserCheck
 } from "lucide-react";

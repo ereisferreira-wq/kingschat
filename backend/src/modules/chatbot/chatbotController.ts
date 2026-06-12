@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import axios from "axios";
 import ChatbotConfig from "../../shared/database/models/ChatbotConfig";
 import Company from "../../shared/database/models/Company";
+import logger from "../../shared/utils/logger";
 
 export async function getConfig(req: Request, res: Response) {
   let config = await ChatbotConfig.findOne({
