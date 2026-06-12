@@ -356,7 +356,7 @@ export async function handleWhatsAppMessage(
             await saveExtractedData(extracted, contact, ticket.id, companyId);
           }
         } catch (_) { }
-        await transferToHuman(ticket, config, contact, remoteJid, whatsappId);
+        await transferToHuman(ticket, config, contact, remoteJid, sock);
         return;
       }
 
