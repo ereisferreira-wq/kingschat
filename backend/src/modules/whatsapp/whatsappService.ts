@@ -53,9 +53,8 @@ const msgRetryMap: CacheStore = {
   del: (key: string) => { retryCache.delete(key); },
   flushAll: () => { retryCache.clear(); },
 };
-
 function emitSession(whatsapp: Whatsapp) {
-  emitToCompany(whatsapp.companyId, `company:${whatsapp.companyId}:whatsappSession`, {
+  emitToCompany(whatsapp.companyId, "whatsappSession", {
     action: "update",
     session: {
       id: whatsapp.id,
@@ -70,7 +69,6 @@ function emitSession(whatsapp: Whatsapp) {
     },
   });
 }
-
 function cleanupSession(whatsappId: number) {
   connections.delete(whatsappId);
   pendingConnections.delete(whatsappId);
