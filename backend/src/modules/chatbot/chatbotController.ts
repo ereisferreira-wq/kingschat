@@ -45,8 +45,11 @@ export async function updateConfig(req: Request, res: Response) {
 }
 
 export async function listModels(req: Request, res: Response) {
-  const ollamaBaseUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
   try {
+    const config = await ChatbotConfig.findOne({
+      where: { companyId: req.companyId },
+    });
+    const ollamaBaseUrl = config?.ollamaBaseUrl || process.env.OLLAMA_BASE_URL || "http://localhost:11434";
     const response = await axios.get(`${ollamaBaseUrl}/api/tags`);
     const models = response.data.models || [];
     res.json({ models: models.map((m: any) => m.name) });

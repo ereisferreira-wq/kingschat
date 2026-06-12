@@ -108,7 +108,10 @@ async function seedAdminUser() {
 }
 
 function validateEnv() {
-  const required = ["JWT_SECRET", "JWT_REFRESH_SECRET", "DB_HOST", "DB_USER", "DB_PASS", "DB_NAME"];
+  const required = ["JWT_SECRET", "JWT_REFRESH_SECRET"];
+  if (process.env.DB_DIALECT !== "sqlite") {
+    required.push("DB_HOST", "DB_USER", "DB_PASS", "DB_NAME");
+  }
   const missing = required.filter(k => !process.env[k]);
   if (missing.length > 0) {
     logger.error(`Missing required environment variables: ${missing.join(", ")}`);

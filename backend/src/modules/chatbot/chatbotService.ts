@@ -7,6 +7,7 @@ import Message from "../../shared/database/models/Message";
 import Contact from "../../shared/database/models/Contact";
 import logger from "../../shared/utils/logger";
 import { emitToCompany } from "../../lib/socket";
+import User from "../../shared/database/models/User";
 
 const TRANSFER_FLAG = "[TRANSFERIR]";
 const REMAINING_ATTEMPTS_FLAG = "[TENTATIVAS_RESTANTES:";
@@ -37,6 +38,8 @@ async function callOllama(
   const baseUrl = config.ollamaBaseUrl || process.env.OLLAMA_BASE_URL || "http://localhost:11434";
   const model = config.aiModel || process.env.OLLAMA_MODEL || "llama3";
 
+  logger.info(`callOllama: ${model} @ ${baseUrl}/api/chat`);
+
   const response = await axios.post(`${baseUrl}/api/chat`, {
     model,
     messages,
@@ -47,7 +50,9 @@ async function callOllama(
     },
   });
 
-  return response.data.message?.content || "";
+  const content = response.data.message?.content || "";
+  logger.info(`callOllama response: ${content.slice(0, 100)}...`);
+  return content;
 }
 
 function normalizeText(text: string) {
@@ -309,6 +314,20 @@ export async function handleWhatsAppMessage(
     });
   } catch (error) {
     logger.error("Error handling WhatsApp message:", error);
+    try {
+      const remoteJid = msg.key.remoteJid;
+      if (remoteJid) {
+        const fallbackMsg = "Desculpe, estou com dificuldades técnicas no momento. Sua mensagem foi registrada e um atendente humano será notificado em breve.";
+        await sock.sendMessage(remoteJid, { text: fallbackMsg });
+      }
+    } catch (_) { }
+    try {
+      emitToCompany(companyId, "chatbot:error", {
+        error: error instanceof Error ? error.message : "Unknown error",
+        whatsappId,
+        companyId,
+      });
+    } catch (_) { }
   }
 }
 

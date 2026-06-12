@@ -86,6 +86,28 @@ export default function ChatbotPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={config.isActive}
+                    onClick={() => setConfig({ ...config, isActive: !config.isActive })}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      config.isActive ? "bg-green-500" : "bg-gray-300 dark:bg-gray-600"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        config.isActive ? "translate-x-6" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                  <span className="text-sm font-medium">
+                    Chatbot ativo {config.isActive ? "🟢" : "🔴"}
+                  </span>
+                </label>
+              </CardContent>
+              <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <Button
                     variant={config.aiProvider === "openai" ? "default" : "outline"}
