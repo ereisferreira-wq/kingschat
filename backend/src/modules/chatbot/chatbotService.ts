@@ -176,6 +176,27 @@ function sendToWhatsApp(whatsappId: number, remoteJid: string, text: string) {
   return sock.sendMessage(remoteJid, { text });
 }
 
+async function saveBotMessage(
+  whatsappId: number,
+  remoteJid: string,
+  ticketId: number,
+  contactId: number,
+  companyId: number,
+  body: string,
+) {
+  const msg = await Message.create({ body, fromMe: true, ticketId, contactId, companyId });
+  emitToCompany(companyId, "message:new", {
+    ticketId,
+    message: { id: msg.id, body: msg.body, fromMe: true, createdAt: msg.createdAt },
+  });
+  try {
+    await sendToWhatsApp(whatsappId, remoteJid, body);
+  } catch (err: any) {
+    logger.error(`WhatsApp send failed (msg saved locally): ${err.message}`);
+  }
+  return msg;
+}
+
 export async function handleWhatsAppMessage(
   whatsappId: number,
   companyId: number,
@@ -261,18 +282,7 @@ export async function handleWhatsAppMessage(
       });
 
       if (config.welcomeMessage) {
-        await sendToWhatsApp(whatsappId, remoteJid, config.welcomeMessage);
-        const msg = await Message.create({
-          body: config.welcomeMessage,
-          fromMe: true,
-          ticketId: ticket.id,
-          contactId: contact.id,
-          companyId,
-        });
-        emitToCompany(companyId, "message:new", {
-          ticketId: ticket.id,
-          message: { id: msg.id, body: msg.body, fromMe: true, createdAt: msg.createdAt },
-        });
+        await saveBotMessage(whatsappId, remoteJid, ticket.id, contact.id, companyId, config.welcomeMessage);
       }
     }
 
@@ -344,14 +354,7 @@ export async function handleWhatsAppMessage(
 
       if (attempts >= maxAttempts || forceTransfer) {
         if (cleanResponse) {
-          await sendToWhatsApp(whatsappId, remoteJid, cleanResponse);
-          await Message.create({
-            body: cleanResponse,
-            fromMe: true,
-            ticketId: ticket.id,
-            contactId: contact.id,
-            companyId,
-          });
+          await saveBotMessage(whatsappId, remoteJid, ticket.id, contact.id, companyId, cleanResponse);
         }
         try {
           const extracted = parseExtractedData(rawResponse);
@@ -368,14 +371,7 @@ export async function handleWhatsAppMessage(
         `Tente reformular sua pergunta de outra forma (tentativa ${attempts}/${maxAttempts}). ` +
         `Se preferir, digite "atendente" para falar com um humano.`;
 
-      await sendToWhatsApp(whatsappId, remoteJid, retryMessage);
-      await Message.create({
-        body: retryMessage,
-        fromMe: true,
-        ticketId: ticket.id,
-        contactId: contact.id,
-        companyId,
-      });
+      await saveBotMessage(whatsappId, remoteJid, ticket.id, contact.id, companyId, retryMessage);
       return;
     }
 
@@ -383,16 +379,8 @@ export async function handleWhatsAppMessage(
       await ticket.update({ botTransferAttempts: 0 });
     }
 
-    await sendToWhatsApp(whatsappId, remoteJid, rawResponse);
-    await Message.create({
-      body: rawResponse,
-      fromMe: true,
-      ticketId: ticket.id,
-      contactId: contact.id,
-      companyId,
-    });
+    await saveBotMessage(whatsappId, remoteJid, ticket.id, contact.id, companyId, rawResponse);
 
-    // Parse and save extracted data (always try after a successful response)
     try {
       const extracted = parseExtractedData(rawResponse);
       if (extracted) {
@@ -436,14 +424,7 @@ async function transferToHuman(
     config.transferMessage ||
     "Estou transferindo para um atendente humano. Por favor, aguarde um momento.";
 
-  await sendToWhatsApp(whatsappId, remoteJid, transferMsg);
-  await Message.create({
-    body: transferMsg,
-    fromMe: true,
-    ticketId: ticket.id,
-    contactId: contact.id,
-    companyId: ticket.companyId,
-  });
+  await saveBotMessage(whatsappId, remoteJid, ticket.id, contact.id, ticket.companyId, transferMsg);
 
   logger.info(
     `Ticket ${ticket.id} transferred to human (contact: ${contact.number})`
