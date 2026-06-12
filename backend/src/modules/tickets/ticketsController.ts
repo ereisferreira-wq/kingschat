@@ -7,6 +7,7 @@ import User from "../../shared/database/models/User";
 import { transferToHumanApi } from "../chatbot/chatbotService";
 import { getConnection } from "../whatsapp/whatsappService";
 import { emitToCompany } from "../../lib/socket";
+import logger from "../../shared/utils/logger";
 
 export async function list(req: Request, res: Response) {
   const { status, page = "1", limit = "20" } = req.query;
@@ -117,15 +118,6 @@ export async function sendMessage(req: Request, res: Response) {
   if (!ticket.userId) updates.userId = req.userId;
   await ticket.update(updates);
 
-  const sock = getConnection(ticket.whatsappId);
-  if (!sock) {
-    return res.status(502).json({ error: "WhatsApp desconectado. Conecte o WhatsApp novamente." });
-  }
-
-  const remoteJid = `${ticket.contact.number}@s.whatsapp.net`;
-
-  await sock.sendMessage(remoteJid, { text: body });
-
   const msg = await Message.create({
     body: body.trim(),
     fromMe: true,
@@ -145,6 +137,16 @@ export async function sendMessage(req: Request, res: Response) {
       createdAt: msg.createdAt,
     },
   });
+
+  try {
+    const sock = getConnection(ticket.whatsappId);
+    if (sock) {
+      const remoteJid = `${ticket.contact.number}@s.whatsapp.net`;
+      await sock.sendMessage(remoteJid, { text: body });
+    }
+  } catch (err: any) {
+    logger.error(`Failed to send user message via WhatsApp: ${err.message}`);
+  }
 
   res.json({ message: msg });
 }

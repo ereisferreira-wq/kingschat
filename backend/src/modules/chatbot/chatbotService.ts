@@ -8,7 +8,6 @@ import Contact from "../../shared/database/models/Contact";
 import Customer from "../../shared/database/models/Customer";
 import logger from "../../shared/utils/logger";
 import { emitToCompany } from "../../lib/socket";
-import { getConnection } from "../whatsapp/whatsappService";
 import User from "../../shared/database/models/User";
 
 const TRANSFER_FLAG = "[TRANSFERIR]";
@@ -170,14 +169,8 @@ async function getAiResponse(
   return callOpenAI(messages, config);
 }
 
-function sendToWhatsApp(whatsappId: number, remoteJid: string, text: string) {
-  const sock = getConnection(whatsappId);
-  if (!sock) throw new Error("WhatsApp desconectado");
-  return sock.sendMessage(remoteJid, { text });
-}
-
 async function saveBotMessage(
-  whatsappId: number,
+  sock: WASocket | undefined,
   remoteJid: string,
   ticketId: number,
   contactId: number,
@@ -190,7 +183,8 @@ async function saveBotMessage(
     message: { id: msg.id, body: msg.body, fromMe: true, createdAt: msg.createdAt },
   });
   try {
-    await sendToWhatsApp(whatsappId, remoteJid, body);
+    if (!sock) throw new Error("WhatsApp desconectado");
+    await sock.sendMessage(remoteJid, { text: body });
   } catch (err: any) {
     logger.error(`WhatsApp send failed (msg saved locally): ${err.message}`);
   }
@@ -201,7 +195,7 @@ export async function handleWhatsAppMessage(
   whatsappId: number,
   companyId: number,
   msg: proto.IWebMessageInfo,
-  _sock: WASocket
+  sock: WASocket
 ) {
   try {
     const text =
@@ -282,7 +276,7 @@ export async function handleWhatsAppMessage(
       });
 
       if (config.welcomeMessage) {
-        await saveBotMessage(whatsappId, remoteJid, ticket.id, contact.id, companyId, config.welcomeMessage);
+        await saveBotMessage(sock, remoteJid, ticket.id, contact.id, companyId, config.welcomeMessage);
       }
     }
 
@@ -317,7 +311,7 @@ export async function handleWhatsAppMessage(
       config.transferToHuman &&
       checkTransferKeywords(text, config.transferKeywords)
     ) {
-      await transferToHuman(ticket, config, contact, remoteJid, whatsappId);
+      await transferToHuman(ticket, config, contact, remoteJid, sock);
       return;
     }
 
@@ -354,7 +348,7 @@ export async function handleWhatsAppMessage(
 
       if (attempts >= maxAttempts || forceTransfer) {
         if (cleanResponse) {
-          await saveBotMessage(whatsappId, remoteJid, ticket.id, contact.id, companyId, cleanResponse);
+          await saveBotMessage(sock, remoteJid, ticket.id, contact.id, companyId, cleanResponse);
         }
         try {
           const extracted = parseExtractedData(rawResponse);
@@ -371,7 +365,7 @@ export async function handleWhatsAppMessage(
         `Tente reformular sua pergunta de outra forma (tentativa ${attempts}/${maxAttempts}). ` +
         `Se preferir, digite "atendente" para falar com um humano.`;
 
-      await saveBotMessage(whatsappId, remoteJid, ticket.id, contact.id, companyId, retryMessage);
+      await saveBotMessage(sock, remoteJid, ticket.id, contact.id, companyId, retryMessage);
       return;
     }
 
@@ -379,7 +373,7 @@ export async function handleWhatsAppMessage(
       await ticket.update({ botTransferAttempts: 0 });
     }
 
-    await saveBotMessage(whatsappId, remoteJid, ticket.id, contact.id, companyId, rawResponse);
+    await saveBotMessage(sock, remoteJid, ticket.id, contact.id, companyId, rawResponse);
 
     try {
       const extracted = parseExtractedData(rawResponse);
@@ -390,10 +384,10 @@ export async function handleWhatsAppMessage(
   } catch (error) {
     logger.error("Error handling WhatsApp message:", error);
     try {
-      const remoteJid = msg.key.remoteJid;
-      if (remoteJid) {
+      const fbRemoteJid = msg.key.remoteJid;
+      if (fbRemoteJid && sock) {
         const fallbackMsg = "Desculpe, estou com dificuldades técnicas no momento. Sua mensagem foi registrada e um atendente humano será notificado em breve.";
-        await sendToWhatsApp(whatsappId, remoteJid, fallbackMsg);
+        await sock.sendMessage(fbRemoteJid, { text: fallbackMsg });
       }
     } catch (_) { }
     try {
@@ -411,7 +405,7 @@ async function transferToHuman(
   config: ChatbotConfig,
   contact: Contact,
   remoteJid: string,
-  whatsappId: number,
+  sock: WASocket,
 ) {
   await ticket.update({
     status: "open",
@@ -424,7 +418,7 @@ async function transferToHuman(
     config.transferMessage ||
     "Estou transferindo para um atendente humano. Por favor, aguarde um momento.";
 
-  await saveBotMessage(whatsappId, remoteJid, ticket.id, contact.id, ticket.companyId, transferMsg);
+  await saveBotMessage(sock, remoteJid, ticket.id, contact.id, ticket.companyId, transferMsg);
 
   logger.info(
     `Ticket ${ticket.id} transferred to human (contact: ${contact.number})`
