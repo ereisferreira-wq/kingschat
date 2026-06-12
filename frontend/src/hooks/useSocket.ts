@@ -31,13 +31,11 @@ export function useSocket(event: string, handler: (data: any) => void) {
   useEffect(() => {
     if (!companyId || !globalSocket) return;
 
-    const fullEvent = `company:${companyId}:${event}`;
-
     const listener = (data: any) => handlerRef.current(data);
-    globalSocket.on(fullEvent, listener);
+    globalSocket.on(event, listener);
 
     return () => {
-      globalSocket?.off(fullEvent, listener);
+      globalSocket?.off(event, listener);
     };
   }, [companyId, event]);
 }
