@@ -125,44 +125,55 @@ export default function ChatbotPage() {
                 </div>
                 <div>
                   <label className="text-sm font-medium block mb-1">Modelo</label>
-                  <div className="flex gap-2">
+                  {config.aiProvider === "openai" ? (
                     <select
-                      className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       value={config.aiModel}
                       onChange={(e) => setConfig({ ...config, aiModel: e.target.value })}
                     >
-                      {config.aiProvider === "openai" ? (
-                        <>
-                          <option value="gpt-5">GPT-5</option>
-                          <option value="gpt-4o">GPT-4o</option>
-                          <option value="gpt-4o-mini">GPT-4o Mini</option>
-                          <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                          <option value="gpt-4">GPT-4</option>
-                          <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                          <option value="o1">o1</option>
-                          <option value="o1-mini">o1 Mini</option>
-                          <option value="o3-mini">o3 Mini</option>
-                        </>
-                      ) : ollamaModels.length > 0 ? (
-                        ollamaModels.map((m) => (
-                          <option key={m} value={m}>{m}</option>
-                        ))
-                      ) : (
-                        <option value="">{loadingModels ? "Carregando..." : "Nenhum modelo encontrado"}</option>
-                      )}
+                      <option value="gpt-5">GPT-5</option>
+                      <option value="gpt-4o">GPT-4o</option>
+                      <option value="gpt-4o-mini">GPT-4o Mini</option>
+                      <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                      <option value="gpt-4">GPT-4</option>
+                      <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                      <option value="o1">o1</option>
+                      <option value="o1-mini">o1 Mini</option>
+                      <option value="o3-mini">o3 Mini</option>
                     </select>
-                    {config.aiProvider === "ollama" && (
+                  ) : (
+                    <div className="flex gap-2">
+                      <Input
+                        value={config.aiModel}
+                        onChange={(e) => setConfig({ ...config, aiModel: e.target.value })}
+                        placeholder="Ex: llama3.2"
+                        className="flex-1"
+                      />
                       <Button
                         variant="outline"
                         size="icon"
                         onClick={fetchOllamaModels}
                         disabled={loadingModels}
-                        title="Atualizar modelos"
+                        title="Buscar modelos disponíveis"
                       >
                         <RefreshCw className={`w-4 h-4 ${loadingModels ? "animate-spin" : ""}`} />
                       </Button>
-                    )}
-                  </div>
+                    </div>
+                  )}
+                  {config.aiProvider === "ollama" && ollamaModels.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {ollamaModels.map((m) => (
+                        <Badge
+                          key={m}
+                          variant={config.aiModel === m ? "default" : "outline"}
+                          className="cursor-pointer"
+                          onClick={() => setConfig({ ...config, aiModel: m })}
+                        >
+                          {m.replace(/^.*\//, "")}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 {config.aiProvider === "openai" && (
                   <div>

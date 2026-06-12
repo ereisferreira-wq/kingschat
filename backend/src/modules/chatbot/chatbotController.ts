@@ -49,12 +49,14 @@ export async function listModels(req: Request, res: Response) {
     const config = await ChatbotConfig.findOne({
       where: { companyId: req.companyId },
     });
-    const ollamaBaseUrl = config?.ollamaBaseUrl || process.env.OLLAMA_BASE_URL || "http://localhost:11434";
-    const response = await axios.get(`${ollamaBaseUrl}/api/tags`);
+    const ollamaBaseUrl = process.env.OLLAMA_BASE_URL || config?.ollamaBaseUrl || "http://localhost:11434";
+    logger.info(`listModels: fetching from ${ollamaBaseUrl}/api/tags`);
+    const response = await axios.get(`${ollamaBaseUrl}/api/tags`, { timeout: 5000 });
     const models = response.data.models || [];
     res.json({ models: models.map((m: any) => m.name) });
   } catch (error: any) {
-    res.status(502).json({ error: "Failed to fetch Ollama models: " + error.message });
+    logger.error(`listModels error: ${error.message}`);
+    res.status(502).json({ error: "Falha ao buscar modelos Ollama: " + error.message });
   }
 }
 
