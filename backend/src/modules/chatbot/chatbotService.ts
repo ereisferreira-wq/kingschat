@@ -8,6 +8,7 @@ import Contact from "../../shared/database/models/Contact";
 import Customer from "../../shared/database/models/Customer";
 import logger from "../../shared/utils/logger";
 import { emitToCompany } from "../../lib/socket";
+import { getConnection } from "../whatsapp/whatsappService";
 import User from "../../shared/database/models/User";
 
 const TRANSFER_FLAG = "[TRANSFERIR]";
@@ -169,11 +170,17 @@ async function getAiResponse(
   return callOpenAI(messages, config);
 }
 
+function sendToWhatsApp(whatsappId: number, remoteJid: string, text: string) {
+  const sock = getConnection(whatsappId);
+  if (!sock) throw new Error("WhatsApp desconectado");
+  return sock.sendMessage(remoteJid, { text });
+}
+
 export async function handleWhatsAppMessage(
   whatsappId: number,
   companyId: number,
   msg: proto.IWebMessageInfo,
-  sock: WASocket
+  _sock: WASocket
 ) {
   try {
     const text =
@@ -227,7 +234,6 @@ export async function handleWhatsAppMessage(
         botTransferAttempts: 0,
       });
 
-      // Auto-create CRM entry if not exists
       try {
         const existing = await Customer.findOne({ where: { phone: contact.number, companyId } });
         if (!existing) {
@@ -255,9 +261,7 @@ export async function handleWhatsAppMessage(
       });
 
       if (config.welcomeMessage) {
-        await sock.sendMessage(remoteJid, {
-          text: config.welcomeMessage,
-        });
+        await sendToWhatsApp(whatsappId, remoteJid, config.welcomeMessage);
         const msg = await Message.create({
           body: config.welcomeMessage,
           fromMe: true,
@@ -291,7 +295,6 @@ export async function handleWhatsAppMessage(
       message: { body: text, fromMe: false },
     });
 
-    // Already transferred to human
     if (ticket.status === "open" && !ticket.isBot) {
       logger.info(`Ticket ${ticket.id} already with human`);
       return;
@@ -300,16 +303,14 @@ export async function handleWhatsAppMessage(
     const maxAttempts = config.maxTransferAttempts || 3;
     let attempts = ticket.botTransferAttempts || 0;
 
-    // Check for transfer keywords (user explicitly asking for human)
     if (
       config.transferToHuman &&
       checkTransferKeywords(text, config.transferKeywords)
     ) {
-      await transferToHuman(ticket, config, contact, remoteJid, sock);
+      await transferToHuman(ticket, config, contact, remoteJid, whatsappId);
       return;
     }
 
-    // Get AI response with conversation history (last 48h)
     const remainingAttempts = Math.max(0, maxAttempts - attempts);
     const historyCutoff = new Date(Date.now() - 48 * 60 * 60 * 1000);
     const recentMessages = await Message.findAll({
@@ -332,7 +333,6 @@ export async function handleWhatsAppMessage(
       history
     );
 
-    // Check if AI flagged for transfer
     if (rawResponse.includes(TRANSFER_FLAG)) {
       attempts++;
       await ticket.update({ botTransferAttempts: attempts });
@@ -343,9 +343,8 @@ export async function handleWhatsAppMessage(
       );
 
       if (attempts >= maxAttempts || forceTransfer) {
-        // Send the last AI response (without the transfer flag) and then transfer
         if (cleanResponse) {
-          await sock.sendMessage(remoteJid, { text: cleanResponse });
+          await sendToWhatsApp(whatsappId, remoteJid, cleanResponse);
           await Message.create({
             body: cleanResponse,
             fromMe: true,
@@ -360,17 +359,16 @@ export async function handleWhatsAppMessage(
             await saveExtractedData(extracted, contact, ticket.id, companyId);
           }
         } catch (_) { }
-        await transferToHuman(ticket, config, contact, remoteJid, sock);
+        await transferToHuman(ticket, config, contact, remoteJid, whatsappId);
         return;
       }
 
-      // Still has attempts left — ask the user to rephrase
       const retryMessage =
         `Desculpe, ainda não consegui entender exatamente o que você precisa. ` +
         `Tente reformular sua pergunta de outra forma (tentativa ${attempts}/${maxAttempts}). ` +
         `Se preferir, digite "atendente" para falar com um humano.`;
 
-      await sock.sendMessage(remoteJid, { text: retryMessage });
+      await sendToWhatsApp(whatsappId, remoteJid, retryMessage);
       await Message.create({
         body: retryMessage,
         fromMe: true,
@@ -381,12 +379,11 @@ export async function handleWhatsAppMessage(
       return;
     }
 
-    // Bot answered successfully — reset attempts counter
     if (ticket.botTransferAttempts > 0) {
       await ticket.update({ botTransferAttempts: 0 });
     }
 
-    await sock.sendMessage(remoteJid, { text: rawResponse });
+    await sendToWhatsApp(whatsappId, remoteJid, rawResponse);
     await Message.create({
       body: rawResponse,
       fromMe: true,
@@ -408,7 +405,7 @@ export async function handleWhatsAppMessage(
       const remoteJid = msg.key.remoteJid;
       if (remoteJid) {
         const fallbackMsg = "Desculpe, estou com dificuldades técnicas no momento. Sua mensagem foi registrada e um atendente humano será notificado em breve.";
-        await sock.sendMessage(remoteJid, { text: fallbackMsg });
+        await sendToWhatsApp(whatsappId, remoteJid, fallbackMsg);
       }
     } catch (_) { }
     try {
@@ -426,7 +423,7 @@ async function transferToHuman(
   config: ChatbotConfig,
   contact: Contact,
   remoteJid: string,
-  sock: WASocket
+  whatsappId: number,
 ) {
   await ticket.update({
     status: "open",
@@ -439,7 +436,7 @@ async function transferToHuman(
     config.transferMessage ||
     "Estou transferindo para um atendente humano. Por favor, aguarde um momento.";
 
-  await sock.sendMessage(remoteJid, { text: transferMsg });
+  await sendToWhatsApp(whatsappId, remoteJid, transferMsg);
   await Message.create({
     body: transferMsg,
     fromMe: true,
