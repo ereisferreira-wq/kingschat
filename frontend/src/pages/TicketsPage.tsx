@@ -4,16 +4,18 @@ import Layout from "../components/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import api from "../lib/api";
-import { MessageSquare, User, Bot } from "lucide-react";
+import { MessageSquare, User, Bot, UserCheck } from "lucide-react";
 import { useSocket } from "../hooks/useSocket";
 
 export default function TicketsPage() {
   const [tickets, setTickets] = useState<any[]>([]);
+  const [statusFilter, setStatusFilter] = useState("");
   const navigate = useNavigate();
 
   const loadTickets = useCallback(() => {
-    api.get("/tickets?limit=50").then((r) => setTickets(r.data.tickets));
-  }, []);
+    const url = statusFilter ? `/tickets?limit=50&status=${statusFilter}` : "/tickets?limit=50";
+    api.get(url).then((r) => setTickets(r.data.tickets));
+  }, [statusFilter]);
 
   useEffect(() => {
     loadTickets();
@@ -40,6 +42,21 @@ export default function TicketsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Conversas ({tickets.length})</CardTitle>
+            <div className="flex gap-2 mt-2">
+              {["", "pending", "open", "closed"].map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setStatusFilter(s)}
+                  className={`text-xs px-3 py-1 rounded-full border transition ${
+                    statusFilter === s
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-background text-muted-foreground border-input hover:border-primary"
+                  }`}
+                >
+                  {s === "" ? "Todas" : s === "pending" ? "Pendentes" : s === "open" ? "Abertas" : "Fechadas"}
+                </button>
+              ))}
+            </div>
           </CardHeader>
           <CardContent>
             {tickets.length === 0 ? (
@@ -70,6 +87,12 @@ export default function TicketsPage() {
                         <p className="text-sm text-muted-foreground truncate max-w-md">
                           {ticket.lastMessage || "..."}
                         </p>
+                        {ticket.user?.name && (
+                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                            <UserCheck className="w-3 h-3" />
+                            {ticket.user.name}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-3">

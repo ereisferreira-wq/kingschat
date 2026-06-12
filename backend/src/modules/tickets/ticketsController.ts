@@ -3,6 +3,7 @@ import { Op } from "sequelize";
 import Ticket from "../../shared/database/models/Ticket";
 import Message from "../../shared/database/models/Message";
 import Contact from "../../shared/database/models/Contact";
+import User from "../../shared/database/models/User";
 import { transferToHumanApi } from "../chatbot/chatbotService";
 import { getConnection } from "../whatsapp/whatsappService";
 import { emitToCompany } from "../../lib/socket";
@@ -19,7 +20,8 @@ export async function list(req: Request, res: Response) {
   const { rows, count } = await Ticket.findAndCountAll({
     where,
     include: [
-      { model: Contact, attributes: ["id", "name", "number", "profilePicUrl"] },
+      { model: Contact, attributes: ["id", "name", "number", "profilePicUrl", "customFields"] },
+      { model: User, attributes: ["id", "name"] },
       { model: Message, limit: 1, order: [["createdAt", "DESC"]] },
     ],
     order: [["updatedAt", "DESC"]],
@@ -41,6 +43,7 @@ export async function getById(req: Request, res: Response) {
     where: { id, companyId: req.companyId },
     include: [
       { model: Contact },
+      { model: User, attributes: ["id", "name"] },
       {
         model: Message,
         order: [["createdAt", "ASC"]],
@@ -81,6 +84,19 @@ export async function transferToHuman(req: Request, res: Response) {
   }
 }
 
+export async function assignTicket(req: Request, res: Response) {
+  const { id } = req.params;
+  const ticket = await Ticket.findOne({
+    where: { id, companyId: req.companyId },
+  });
+  if (!ticket) {
+    return res.status(404).json({ error: "Ticket not found" });
+  }
+  await ticket.update({ userId: req.userId, isBot: false, status: "open" });
+  emitToCompany(req.companyId, "ticket:updated", { ticketId: ticket.id });
+  res.json({ ticket });
+}
+
 export async function sendMessage(req: Request, res: Response) {
   const { id } = req.params;
   const { body } = req.body;
@@ -96,10 +112,10 @@ export async function sendMessage(req: Request, res: Response) {
     return res.status(404).json({ error: "Ticket not found" });
   }
 
-  // If bot was active, mark as human-handled so AI stops
-  if (ticket.isBot) {
-    await ticket.update({ isBot: false, status: "open" });
-  }
+  // Auto-assign to sender + mark human-handled
+  const updates: any = { isBot: false, status: "open" };
+  if (!ticket.userId) updates.userId = req.userId;
+  await ticket.update(updates);
 
   const sock = getConnection(ticket.whatsappId);
   if (!sock) {

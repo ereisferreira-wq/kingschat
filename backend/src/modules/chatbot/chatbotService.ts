@@ -56,6 +56,57 @@ async function callOllama(
   return content;
 }
 
+const DADOS_REGEX = /\[DADOS:\s*(.*?)\]/i;
+
+function parseExtractedData(text: string): Record<string, string> | null {
+  const match = text.match(DADOS_REGEX);
+  if (!match) return null;
+  const pairs = match[1].split(",").map(s => s.trim()).filter(Boolean);
+  const data: Record<string, string> = {};
+  for (const pair of pairs) {
+    const eqIdx = pair.indexOf("=");
+    if (eqIdx > 0) {
+      const key = pair.slice(0, eqIdx).trim().toLowerCase();
+      const val = pair.slice(eqIdx + 1).trim();
+      if (key && val) data[key] = val;
+    }
+  }
+  return Object.keys(data).length > 0 ? data : null;
+}
+
+async function saveExtractedData(
+  data: Record<string, string>,
+  contact: Contact,
+  ticketId: number,
+  companyId: number
+) {
+  try {
+    const existing = JSON.parse(contact.customFields || "{}");
+    const merged = { ...existing, ...data };
+    await contact.update({ customFields: JSON.stringify(merged) });
+
+    // Sync to CRM
+    const customer = await Customer.findOne({ where: { phone: contact.number, companyId } });
+    if (customer) {
+      const crmNotes = Object.entries(merged)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join("\n");
+      await customer.update({
+        name: merged.nome || merged.name || customer.name,
+        notes: crmNotes,
+        tags: Object.keys(merged).join(", "),
+      });
+    }
+
+    emitToCompany(companyId, "contact:updated", {
+      contactId: contact.id,
+      customFields: merged,
+    });
+  } catch (err) {
+    logger.error("Failed to save extracted data:", err);
+  }
+}
+
 function normalizeText(text: string) {
   return text
     .toLowerCase()
@@ -94,8 +145,16 @@ async function getAiResponse(
     context = `\n\nBase de conhecimento da empresa:\n${config.knowledgeBase}\n\nUse ESSAS INFORMAÇÕES ACIMA para responder. Se a informação não for suficiente para responder, avise o cliente e adicione "${TRANSFER_FLAG}" ao final.`;
   }
 
+  const extractionFields = (config.extractionFields || "nome, cidade, placa")
+    .split(",").map(s => s.trim()).filter(Boolean);
+
+  let extractionPrompt = "";
+  if (extractionFields.length > 0) {
+    extractionPrompt = `\n\nEXTRAÇÃO DE DADOS DO CLIENTE:\nDurante a conversa, você DEVE perguntar e coletar: ${extractionFields.join(", ")}.\nSempre que obter essas informações, adicione ao FINAL da sua resposta o bloco:\n[DADOS: ${extractionFields.map(f => `${f}=valor`).join(", ")}]\nSubstitua "valor" pelos dados reais do cliente. Se algum campo ainda não foi coletado, não inclua no bloco.\n\nExemplo de resposta com dados:\n"Cliente: nome=João, cidade=SP, placa=ABC-1234"\nResposta: "Perfeito, João! Anotei seus dados. [DADOS: nome=João, cidade=SP, placa=ABC-1234]"`;
+  }
+
   const messages: { role: string; content: string }[] = [
-    { role: "system", content: systemPrompt + context },
+    { role: "system", content: systemPrompt + context + extractionPrompt },
   ];
 
   if (history) {
@@ -295,6 +354,12 @@ export async function handleWhatsAppMessage(
             companyId,
           });
         }
+        try {
+          const extracted = parseExtractedData(rawResponse);
+          if (extracted) {
+            await saveExtractedData(extracted, contact, ticket.id, companyId);
+          }
+        } catch (_) { }
         await transferToHuman(ticket, config, contact, remoteJid, sock);
         return;
       }
@@ -329,6 +394,14 @@ export async function handleWhatsAppMessage(
       contactId: contact.id,
       companyId,
     });
+
+    // Parse and save extracted data (always try after a successful response)
+    try {
+      const extracted = parseExtractedData(rawResponse);
+      if (extracted) {
+        await saveExtractedData(extracted, contact, ticket.id, companyId);
+      }
+    } catch (_) { }
   } catch (error) {
     logger.error("Error handling WhatsApp message:", error);
     try {

@@ -20,6 +20,7 @@ export default function ChatbotPage() {
     ollamaBaseUrl: "http://localhost:11434",
     welcomeMessage: "",
     farewellMessage: "",
+    extractionFields: "nome, cidade, placa",
     transferToHuman: false,
     transferKeywords: "",
     transferMessage: "",
@@ -191,6 +192,19 @@ export default function ChatbotPage() {
                 <CardTitle>Personalidade do Bot</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium block mb-1">
+                    Campos para extrair dos clientes
+                  </label>
+                  <Input
+                    value={config.extractionFields}
+                    onChange={(e) => setConfig({ ...config, extractionFields: e.target.value })}
+                    placeholder="nome, cidade, placa, veiculo, telefone"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Separe por vírgulas. A IA vai perguntar esses dados e salvar automaticamente no CRM.
+                  </p>
+                </div>
                 <div>
                   <label className="text-sm font-medium block mb-1">
                     Prompt do Sistema

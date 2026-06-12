@@ -84,6 +84,10 @@ class ChatbotConfig extends Model<ChatbotConfig> {
   @Column(DataType.TEXT)
   knowledgeBase: string;
 
+  @Default("nome, cidade, placa")
+  @Column(DataType.TEXT)
+  extractionFields: string;
+
   @ForeignKey(() => Company)
   @Column(DataType.INTEGER)
   companyId: number;
