@@ -4,9 +4,11 @@ import Layout from "../components/Layout";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
 import api from "../lib/api";
+import toast from "react-hot-toast";
 import { useSocket } from "../hooks/useSocket";
-import { ArrowLeft, Send, Bot, User, Phone, Loader2 } from "lucide-react";
+import { ArrowLeft, Send, Bot, User, Phone, MapPin, Car, Loader2, Save } from "lucide-react";
 
 export default function TicketChatPage() {
   const { id } = useParams<{ id: string }>();
@@ -16,6 +18,9 @@ export default function TicketChatPage() {
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [contactCity, setContactCity] = useState("");
+  const [contactPlate, setContactPlate] = useState("");
+  const [savingContact, setSavingContact] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -24,6 +29,11 @@ export default function TicketChatPage() {
     api.get(`/tickets/${id}`).then((r) => {
       setTicket(r.data.ticket);
       setMessages(r.data.ticket.messages || []);
+      const contact = r.data.ticket.contact;
+      if (contact) {
+        setContactCity(contact.city || "");
+        setContactPlate(contact.licensePlate || "");
+      }
     }).catch(() => {
       navigate("/tickets");
     }).finally(() => setLoading(false));
@@ -56,6 +66,19 @@ export default function TicketChatPage() {
       // silent
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleSaveContact = async () => {
+    if (!ticket?.contact?.id) return;
+    setSavingContact(true);
+    try {
+      await api.put(`/contacts/${ticket.contact.id}`, { city: contactCity, licensePlate: contactPlate });
+      toast.success("Dados do contato salvos");
+    } catch {
+      toast.error("Erro ao salvar dados");
+    } finally {
+      setSavingContact(false);
     }
   };
 
@@ -132,6 +155,33 @@ export default function TicketChatPage() {
             </Badge>
           )}
         </div>
+
+        {/* Customer Data */}
+        {ticket.contact && (
+          <div className="flex items-center gap-2 py-2 px-3 border-b bg-muted/30">
+            <div className="flex items-center gap-1 flex-1">
+              <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              <input
+                className="flex-1 min-w-0 bg-transparent border-none outline-none text-xs px-1 py-0.5 placeholder:text-muted-foreground"
+                placeholder="Cidade"
+                value={contactCity}
+                onChange={(e) => setContactCity(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-1 flex-1">
+              <Car className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              <input
+                className="flex-1 min-w-0 bg-transparent border-none outline-none text-xs px-1 py-0.5 placeholder:text-muted-foreground uppercase"
+                placeholder="Placa"
+                value={contactPlate}
+                onChange={(e) => setContactPlate(e.target.value.toUpperCase())}
+              />
+            </div>
+            <Button variant="ghost" size="icon" className="w-6 h-6 shrink-0" onClick={handleSaveContact} disabled={savingContact}>
+              <Save className="w-3 h-3" />
+            </Button>
+          </div>
+        )}
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto py-4 space-y-3">

@@ -129,7 +129,7 @@ async function startup() {
     await db.authenticate();
     logger.info("Database connected");
 
-    await db.sync();
+    await db.sync({ alter: true });
     logger.info("Database synced");
 
     await seedPlans();

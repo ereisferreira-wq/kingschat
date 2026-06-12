@@ -5,6 +5,7 @@ import ChatbotConfig from "../../shared/database/models/ChatbotConfig";
 import Ticket from "../../shared/database/models/Ticket";
 import Message from "../../shared/database/models/Message";
 import Contact from "../../shared/database/models/Contact";
+import Customer from "../../shared/database/models/Customer";
 import logger from "../../shared/utils/logger";
 import { emitToCompany } from "../../lib/socket";
 import User from "../../shared/database/models/User";
@@ -166,6 +167,22 @@ export async function handleWhatsAppMessage(
         isBot: true,
         botTransferAttempts: 0,
       });
+
+      // Auto-create CRM entry if not exists
+      try {
+        const existing = await Customer.findOne({ where: { phone: contact.number, companyId } });
+        if (!existing) {
+          await Customer.create({
+            name: contact.name || contact.number,
+            phone: contact.number,
+            status: "lead",
+            companyId,
+          });
+          logger.info(`CRM auto-created for ${contact.number}`);
+        }
+      } catch (crmErr) {
+        logger.error("Failed to auto-create CRM:", crmErr);
+      }
 
       emitToCompany(companyId, "ticket:new", {
         ticket: {

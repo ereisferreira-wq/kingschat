@@ -16,6 +16,7 @@ import subscriptionRoutes from "./modules/subscriptions/subscriptionRoutes";
 import companyRoutes from "./modules/company/companyRoutes";
 import crmRoutes from "./modules/crm/crmRoutes";
 import schedulerRoutes from "./modules/scheduler/schedulerRoutes";
+import contactsRoutes from "./modules/contacts/contactsRoutes";
 import { errorHandler } from "./shared/middleware/errorHandler";
 
 const app = express();
@@ -75,6 +76,7 @@ app.use(ticketsRoutes);
 app.use(subscriptionRoutes);
 app.use(companyRoutes);
 app.use(crmRoutes);
+app.use(contactsRoutes);
 app.use(schedulerRoutes);
 
 app.use(errorHandler);

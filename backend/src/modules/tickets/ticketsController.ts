@@ -102,11 +102,13 @@ export async function sendMessage(req: Request, res: Response) {
   }
 
   const sock = getConnection(ticket.whatsappId);
+  if (!sock) {
+    return res.status(502).json({ error: "WhatsApp desconectado. Conecte o WhatsApp novamente." });
+  }
+
   const remoteJid = `${ticket.contact.number}@s.whatsapp.net`;
 
-  if (sock) {
-    await sock.sendMessage(remoteJid, { text: body });
-  }
+  await sock.sendMessage(remoteJid, { text: body });
 
   const msg = await Message.create({
     body: body.trim(),

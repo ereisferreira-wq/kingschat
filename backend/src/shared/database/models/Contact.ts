@@ -23,6 +23,12 @@ class Contact extends Model<Contact> {
   @Column(DataType.TEXT)
   profilePicUrl: string;
 
+  @Column(DataType.STRING)
+  city: string;
+
+  @Column(DataType.STRING)
+  licensePlate: string;
+
   @ForeignKey(() => Company)
   @Column(DataType.INTEGER)
   companyId: number;
