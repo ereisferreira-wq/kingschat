@@ -327,7 +327,7 @@ export async function handleWhatsAppMessage(
     });
     const history = recentMessages
       .filter((m) => new Date(m.createdAt) >= historyCutoff)
-      .slice(-5)
+      .slice(-30)
       .map((m) => ({
         role: m.fromMe ? "assistant" : "user",
         content: m.body,
