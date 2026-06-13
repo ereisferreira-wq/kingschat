@@ -49,7 +49,8 @@ async function callOllama(
     stream: false,
     options: {
       temperature: config.temperature || 0.7,
-      num_predict: config.maxTokens || 2048,
+      num_predict: 256,
+      num_ctx: 2048,
     },
   }, { timeout: 120000 });
 
@@ -132,7 +133,7 @@ async function getAiResponse(
   history?: { role: string; content: string }[]
 ) {
   const transferInstruction = config.transferToHuman
-    ? `\n\nIMPORTANTE: Se você NÃO souber responder a pergunta do cliente, ou se estiver fora do seu conhecimento, escreva "${TRANSFER_FLAG}" no final da sua resposta. O cliente ainda tem ${remainingAttempts} chance(s) antes de ser transferido para um humano. Se ele já usou todas as chances, escreva "${TRANSFER_FLAG}${REMAINING_ATTEMPTS_FLAG}0]" para forçar a transferência.`
+    ? `\n\nNão soube responder? Escreva "${TRANSFER_FLAG}" ao final. Tentativas: ${remainingAttempts}. Fim: "${TRANSFER_FLAG}${REMAINING_ATTEMPTS_FLAG}0]"`
     : "";
 
   const transferPrompt =
@@ -144,7 +145,7 @@ async function getAiResponse(
 
   let context = "";
   if (config.knowledgeBase?.trim()) {
-    context = `\n\nBase de conhecimento da empresa:\n${config.knowledgeBase}\n\nUse ESSAS INFORMAÇÕES ACIMA para responder. Se a informação não for suficiente para responder, avise o cliente e adicione "${TRANSFER_FLAG}" ao final.`;
+    context = `\n\nBase: ${config.knowledgeBase}\nUse apenas esses dados.`;
   }
 
   const extractionFields = (config.extractionFields || "nome, cidade, placa")
@@ -152,7 +153,7 @@ async function getAiResponse(
 
   let extractionPrompt = "";
   if (extractionFields.length > 0) {
-    extractionPrompt = `\n\nEXTRAÇÃO DE DADOS DO CLIENTE:\nDurante a conversa, você DEVE perguntar e coletar: ${extractionFields.join(", ")}.\nSempre que obter essas informações, adicione ao FINAL da sua resposta o bloco:\n[DADOS: ${extractionFields.map(f => `${f}=valor`).join(", ")}]\nSubstitua "valor" pelos dados reais do cliente. Se algum campo ainda não foi coletado, não inclua no bloco.\n\nExemplo de resposta com dados:\n"Cliente: nome=João, cidade=SP, placa=ABC-1234"\nResposta: "Perfeito, João! Anotei seus dados. [DADOS: nome=João, cidade=SP, placa=ABC-1234]"`;
+    extractionPrompt = `\n\nColete: ${extractionFields.join(", ")}. Ao final: [DADOS: campo=valor, ...]`;
   }
 
   const messages: { role: string; content: string }[] = [
@@ -326,7 +327,7 @@ export async function handleWhatsAppMessage(
     });
     const history = recentMessages
       .filter((m) => new Date(m.createdAt) >= historyCutoff)
-      .slice(-20)
+      .slice(-5)
       .map((m) => ({
         role: m.fromMe ? "assistant" : "user",
         content: m.body,
