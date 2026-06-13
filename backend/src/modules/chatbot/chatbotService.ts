@@ -51,7 +51,7 @@ async function callOllama(
       temperature: config.temperature || 0.7,
       num_predict: config.maxTokens || 2048,
     },
-  });
+  }, { timeout: 120000 });
 
   const content = response.data.message?.content || "";
   logger.info(`callOllama response: ${content.slice(0, 100)}...`);
