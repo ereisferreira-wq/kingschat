@@ -315,7 +315,7 @@ export async function disconnectWhatsApp(whatsappId: number) {
     await whatsapp.update({ status: "DISCONNECTED", qrcode: "" });
     emitSession(whatsapp);
   }
-  retriesQrCode.delete(whatsappId);
+  cleanupSession(whatsappId);
 }
 
 export async function sendMessage(whatsappId: number, to: string, text: string) {
