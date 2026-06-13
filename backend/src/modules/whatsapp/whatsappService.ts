@@ -149,6 +149,9 @@ async function doConnectWhatsApp(whatsappId: number): Promise<WASocket> {
   if (!whatsapp) throw new Error("WhatsApp not found");
 
   const sessionPath = path.join(sessionsDir, `whatsapp-${whatsappId}`);
+  if (!fs.existsSync(sessionPath)) {
+    fs.mkdirSync(sessionPath, { recursive: true });
+  }
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
 
   const proxyUrl = process.env.WA_PROXY_URL;

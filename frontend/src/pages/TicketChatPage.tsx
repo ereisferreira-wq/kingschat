@@ -77,8 +77,7 @@ export default function TicketChatPage() {
     if (!body.trim() || sending) return;
     setSending(true);
     try {
-      const res = await api.post(`/tickets/${id}/messages`, { body: body.trim() });
-      setMessages((prev) => [...prev, res.data.message]);
+      await api.post(`/tickets/${id}/messages`, { body: body.trim() });
       setBody("");
     } catch (err: any) {
       toast.error(err.response?.data?.error || "Erro ao enviar");
