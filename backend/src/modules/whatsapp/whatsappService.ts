@@ -189,7 +189,7 @@ async function doConnectWhatsApp(whatsappId: number): Promise<WASocket> {
       qrRetryCount += 1;
       retriesQrCode.set(whatsappId, qrRetryCount);
 
-      if (qrRetryCount > 3) {
+      if (qrRetryCount > 10) {
         logger.warn(`WhatsApp ${whatsappId} exceeded QR retries`);
         await whatsapp.update({ status: "DISCONNECTED", qrcode: "" });
         fs.rmSync(sessionPath, { recursive: true, force: true });
@@ -303,6 +303,11 @@ export async function disconnectWhatsApp(whatsappId: number) {
   if (sock) {
     sock.end(new Error("Manual disconnect"));
     connections.delete(whatsappId);
+  }
+
+  const sessionPath = path.join(sessionsDir, `whatsapp-${whatsappId}`);
+  if (fs.existsSync(sessionPath)) {
+    fs.rmSync(sessionPath, { recursive: true, force: true });
   }
 
   const whatsapp = await Whatsapp.findByPk(whatsappId);
