@@ -19,6 +19,7 @@ import Ticket from "../../shared/database/models/Ticket";
 import Message from "../../shared/database/models/Message";
 import Contact from "../../shared/database/models/Contact";
 import { emitToCompany } from "../../lib/socket";
+import { setConnection, getConnection, deleteConnection } from "../../shared/services/connectionManager";
 
 const MAX_RECONNECT_ATTEMPTS = 15;
 const BASE_RECONNECT_DELAY_MS = 2000;
@@ -41,7 +42,6 @@ if (!fs.existsSync(sessionsDir)) {
   fs.mkdirSync(sessionsDir, { recursive: true });
 }
 
-const connections = new Map<number, WASocket>();
 const retriesQrCode = new Map<number, number>();
 const pendingConnections = new Map<number, Promise<WASocket>>();
 const reconnectAttempts = new Map<number, number>();
@@ -70,7 +70,7 @@ function emitSession(whatsapp: Whatsapp) {
   });
 }
 function cleanupSession(whatsappId: number) {
-  connections.delete(whatsappId);
+  deleteConnection(whatsappId);
   pendingConnections.delete(whatsappId);
   retriesQrCode.delete(whatsappId);
   reconnectAttempts.delete(whatsappId);
@@ -179,7 +179,7 @@ async function doConnectWhatsApp(whatsappId: number): Promise<WASocket> {
     logger: baileysLogger,
   });
 
-  connections.set(whatsappId, sock);
+  setConnection(whatsappId, sock);
   let qrRetryCount = retriesQrCode.get(whatsappId) || 0;
 
   sock.ev.on("connection.update", async (update) => {
@@ -231,8 +231,8 @@ async function doConnectWhatsApp(whatsappId: number): Promise<WASocket> {
         }
 
         const delay = Math.min(BASE_RECONNECT_DELAY_MS * Math.pow(2, attempt - 1), 60000);
-        logger.info(`WhatsApp ${whatsappId} reconnecting in ${delay}ms (attempt ${attempt}/${MAX_RECONNECT_ATTEMPTS})`);
-        connections.delete(whatsappId);
+        logger.info(`WhatsApp ${whatsappId} disconnected (code: ${statusCode}), reconnecting in ${delay}ms (attempt ${attempt}/${MAX_RECONNECT_ATTEMPTS})`);
+        deleteConnection(whatsappId);
         setTimeout(() => connectWhatsApp(whatsappId), delay);
         return;
       }
@@ -264,7 +264,7 @@ async function doConnectWhatsApp(whatsappId: number): Promise<WASocket> {
   sock.ev.on("messages.upsert", async (msg) => {
     for (const message of msg.messages) {
       if (!message.key.fromMe && message.message) {
-        await handleWhatsAppMessage(whatsappId, whatsapp.companyId, message, sock);
+        await handleWhatsAppMessage(whatsappId, whatsapp.companyId, message);
       }
       if (message.key.fromMe && message.message) {
         await handleMyOwnMessage(whatsappId, whatsapp.companyId, message, sock);
@@ -290,7 +290,7 @@ export async function restoreAllSessions() {
 }
 
 export async function requestPairingCode(whatsappId: number, phoneNumber: string) {
-  const sock = connections.get(whatsappId);
+  const sock = getConnection(whatsappId);
   if (!sock) throw new Error("WhatsApp not connected. Start session first.");
 
   const code = await sock.requestPairingCode(phoneNumber);
@@ -299,10 +299,10 @@ export async function requestPairingCode(whatsappId: number, phoneNumber: string
 }
 
 export async function disconnectWhatsApp(whatsappId: number) {
-  const sock = connections.get(whatsappId);
+  const sock = getConnection(whatsappId);
   if (sock) {
     sock.end(new Error("Manual disconnect"));
-    connections.delete(whatsappId);
+    deleteConnection(whatsappId);
   }
 
   const sessionPath = path.join(sessionsDir, `whatsapp-${whatsappId}`);
@@ -319,19 +319,17 @@ export async function disconnectWhatsApp(whatsappId: number) {
 }
 
 export async function sendMessage(whatsappId: number, to: string, text: string) {
-  const sock = connections.get(whatsappId);
+  const sock = getConnection(whatsappId);
   if (!sock) throw new Error("WhatsApp not connected");
 
   const jid = to.includes("@") ? to : `${to}@s.whatsapp.net`;
   await sock.sendMessage(jid, { text });
 }
 
-export function getConnection(whatsappId: number): WASocket | undefined {
-  return connections.get(whatsappId);
-}
+export { getConnection };
 
 export async function getWhatsAppStatus(whatsappId: number) {
-  const sock = connections.get(whatsappId);
+  const sock = getConnection(whatsappId);
   const whatsapp = await Whatsapp.findByPk(whatsappId);
   return {
     id: whatsappId,
