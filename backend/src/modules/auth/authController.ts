@@ -4,6 +4,7 @@ import { hash } from "bcryptjs";
 import User from "../../shared/database/models/User";
 import Company from "../../shared/database/models/Company";
 import Plan from "../../shared/database/models/Plan";
+import logger from "../../shared/utils/logger";
 
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
@@ -42,12 +43,15 @@ export async function login(req: Request, res: Response) {
     return res.status(400).json({ error: "Email and password required" });
   }
 
+  logger.info(`Login attempt: email="${email}" password.length=${password?.length}`);
+
   const user = await User.findOne({
     where: { email },
     include: [{ model: Company, include: [{ model: Plan, as: "plan" }] }],
   });
 
   if (!user) {
+    logger.warn(`Login failed: user not found for email="${email}"`);
     return res.status(401).json({ error: "Invalid credentials" });
   }
 
@@ -57,6 +61,7 @@ export async function login(req: Request, res: Response) {
 
   const valid = await user.checkPassword(password);
   if (!valid) {
+    logger.warn(`Login failed: wrong password for email="${email}"`);
     return res.status(401).json({ error: "Invalid credentials" });
   }
 
