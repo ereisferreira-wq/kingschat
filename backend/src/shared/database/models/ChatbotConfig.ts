@@ -84,6 +84,17 @@ class ChatbotConfig extends Model<ChatbotConfig> {
   @Column(DataType.TEXT)
   knowledgeBase: string;
 
+  @Default("")
+  @Column(DataType.STRING)
+  attendantName: string;
+
+  @Default("")
+  @Column(DataType.STRING)
+  sector: string;
+
+  @Column(DataType.TEXT)
+  attendanceInstructions: string;
+
   @Default("nome, cidade, placa")
   @Column(DataType.TEXT)
   extractionFields: string;

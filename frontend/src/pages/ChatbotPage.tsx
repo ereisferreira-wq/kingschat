@@ -13,6 +13,9 @@ export default function ChatbotPage() {
     isActive: true,
     aiProvider: "openai",
     aiModel: "gpt-4o",
+    attendantName: "",
+    sector: "",
+    attendanceInstructions: "",
     systemPrompt: "",
     temperature: 0.7,
     maxTokens: 2048,
@@ -203,6 +206,33 @@ export default function ChatbotPage() {
                 <CardTitle>Personalidade do Bot</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium block mb-1">Nome do Atendente</label>
+                    <Input
+                      value={config.attendantName}
+                      onChange={(e) => setConfig({ ...config, attendantName: e.target.value })}
+                      placeholder="Ex: Derick"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium block mb-1">Setor</label>
+                    <Input
+                      value={config.sector}
+                      onChange={(e) => setConfig({ ...config, sector: e.target.value })}
+                      placeholder="Ex: Seguros Loovi"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium block mb-1">Instruções de Atendimento</label>
+                  <textarea
+                    className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={config.attendanceInstructions}
+                    onChange={(e) => setConfig({ ...config, attendanceInstructions: e.target.value })}
+                    placeholder="Ex: Sempre pergunte o nome do cliente antes de iniciar. Ofereça as opções de seguro: carro, moto, vida, residencial."
+                  />
+                </div>
                 <div>
                   <label className="text-sm font-medium block mb-1">
                     Campos para extrair dos clientes
@@ -218,13 +248,13 @@ export default function ChatbotPage() {
                 </div>
                 <div>
                   <label className="text-sm font-medium block mb-1">
-                    Prompt do Sistema
+                    Prompt do Sistema (opcional)
                   </label>
                   <textarea
-                    className="w-full min-h-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm"
                     value={config.systemPrompt}
                     onChange={(e) => setConfig({ ...config, systemPrompt: e.target.value })}
-                    placeholder="Ex: Você é um atendente virtual da empresa X. Responda de forma educada e profissional..."
+                    placeholder="Instruções extras para a IA (opcional)"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">

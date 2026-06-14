@@ -136,6 +136,9 @@ async function startup() {
     await qi.addColumn("chatbot_configs", "extractionFields", { type: "TEXT", defaultValue: "nome, cidade, placa" }).catch(() => {});
     await qi.addColumn("contacts", "customFields", { type: "TEXT" }).catch(() => {});
     await qi.addColumn("chatbot_configs", "ollamaBaseUrl", { type: "TEXT", defaultValue: "http://localhost:11434" }).catch(() => {});
+    await qi.addColumn("chatbot_configs", "attendantName", { type: "STRING" }).catch(() => {});
+    await qi.addColumn("chatbot_configs", "sector", { type: "STRING" }).catch(() => {});
+    await qi.addColumn("chatbot_configs", "attendanceInstructions", { type: "TEXT" }).catch(() => {});
 
     await seedPlans();
     await seedAdminUser();

@@ -132,20 +132,35 @@ async function getAiResponse(
   remainingAttempts: number,
   history?: { role: string; content: string }[]
 ) {
+  const name = config.attendantName || "Atendente";
+  const sector = config.sector ? ` do setor ${config.sector}` : "";
+
+  const personaRule =
+    `Você é ${name}, atendente${sector}. ` +
+    `Responda SEMPRE em primeira pessoa como se fosse o próprio atendente. ` +
+    `Nunca trate a conversa como treinamento, simulação ou exemplo. ` +
+    `Você NÃO é uma IA sendo treinada — você é o atendente real. ` +
+    `Seja direto, educado e objetivo.`;
+
   const transferInstruction = config.transferToHuman
     ? `\n\nNão soube responder? Escreva "${TRANSFER_FLAG}" ao final. Tentativas: ${remainingAttempts}. Fim: "${TRANSFER_FLAG}${REMAINING_ATTEMPTS_FLAG}0]"`
     : "";
 
+  const instructions = config.attendanceInstructions
+    ? `\n\nInstruções de atendimento:\n${config.attendanceInstructions}`
+    : "";
+
+  const systemPrompt = config.systemPrompt
+    ? `\n\n${config.systemPrompt}`
+    : "";
+
   const transferPrompt =
     config.transferPrompt ||
-    "Você é responsável por responder perguntas sobre a empresa. Seja educado e profissional.";
-
-  const systemPrompt =
-    config.systemPrompt || transferPrompt + transferInstruction;
+    "";
 
   let context = "";
   if (config.knowledgeBase?.trim()) {
-    context = `\n\nBase: ${config.knowledgeBase}\nUse apenas esses dados.`;
+    context = `\n\nBase de conhecimento:\n${config.knowledgeBase}`;
   }
 
   const extractionFields = (config.extractionFields || "nome, cidade, placa")
@@ -156,8 +171,10 @@ async function getAiResponse(
     extractionPrompt = `\n\nColete: ${extractionFields.join(", ")}. Ao final: [DADOS: campo=valor, ...]`;
   }
 
+  const fullSystemPrompt = personaRule + instructions + systemPrompt + transferPrompt + transferInstruction + context + extractionPrompt;
+
   const messages: { role: string; content: string }[] = [
-    { role: "system", content: systemPrompt + context + extractionPrompt },
+    { role: "system", content: fullSystemPrompt },
   ];
 
   if (history) {
