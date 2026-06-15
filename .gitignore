@@ -14,3 +14,4 @@ sessions/
 *.log
 backend/data/
 tmp.json
+AGENTS.md
