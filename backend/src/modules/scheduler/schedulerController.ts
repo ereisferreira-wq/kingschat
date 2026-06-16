@@ -3,6 +3,7 @@ import { Op } from "sequelize";
 import ScheduleTask from "../../shared/database/models/ScheduleTask";
 import ScheduleLog from "../../shared/database/models/ScheduleLog";
 import Customer from "../../shared/database/models/Customer";
+import { cleanupClosedTickets } from "./schedulerService";
 
 export async function listTasks(req: Request, res: Response) {
   const tasks = await ScheduleTask.findAll({
@@ -93,6 +94,15 @@ export async function removeTask(req: Request, res: Response) {
 
   await task.destroy();
   res.json({ message: "Task removed" });
+}
+
+export async function runCleanup(req: Request, res: Response) {
+  try {
+    await cleanupClosedTickets();
+    res.json({ message: "Cleanup concluído" });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 }
 
 export async function getLogs(req: Request, res: Response) {

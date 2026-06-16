@@ -32,6 +32,8 @@ async function seedPlans() {
         maxUsers: 1,
         maxConnections: 1,
         maxContacts: 300,
+        maxProducts: 3,
+        maxPersist: 3,
         price: 199.90,
         useWhatsApp: true,
         useChatbot: true,
@@ -41,8 +43,10 @@ async function seedPlans() {
       {
         name: "Standard",
         maxUsers: 3,
-        maxConnections: 2,
+        maxConnections: 3,
         maxContacts: 600,
+        maxProducts: 5,
+        maxPersist: 5,
         price: 399.90,
         useWhatsApp: true,
         useChatbot: true,
@@ -52,8 +56,10 @@ async function seedPlans() {
       {
         name: "Pro",
         maxUsers: 10,
-        maxConnections: 5,
+        maxConnections: 10,
         maxContacts: 1000,
+        maxProducts: 10,
+        maxPersist: 10,
         price: 799.90,
         useWhatsApp: true,
         useChatbot: true,
@@ -108,7 +114,7 @@ async function seedAdminUser() {
 }
 
 function validateEnv() {
-  const required = ["JWT_SECRET", "JWT_REFRESH_SECRET"];
+  const required = ["JWT_SECRET", "JWT_REFRESH_SECRET", "ENCRYPTION_KEY"];
   if (process.env.DB_DIALECT !== "sqlite") {
     required.push("DB_HOST", "DB_USER", "DB_PASS", "DB_NAME");
   }
@@ -139,6 +145,22 @@ async function startup() {
     await qi.addColumn("chatbot_configs", "attendantName", { type: "STRING" }).catch(() => {});
     await qi.addColumn("chatbot_configs", "sector", { type: "STRING" }).catch(() => {});
     await qi.addColumn("chatbot_configs", "attendanceInstructions", { type: "TEXT" }).catch(() => {});
+    await qi.addColumn("whatsapps", "sector", { type: "STRING", defaultValue: "" }).catch(() => {});
+    await qi.addColumn("chatbot_configs", "emojiLevel", { type: "STRING", defaultValue: "moderate" }).catch(() => {});
+    await qi.addColumn("chatbot_configs", "aiGoal", { type: "TEXT" }).catch(() => {});
+    await qi.addColumn("chatbot_configs", "persistIntervals", { type: "TEXT", defaultValue: "[]" }).catch(() => {});
+    await qi.addColumn("plans", "maxProducts", { type: "INTEGER", defaultValue: 3 }).catch(() => {});
+    await qi.addColumn("plans", "maxPersist", { type: "INTEGER", defaultValue: 3 }).catch(() => {});
+    await qi.addColumn("tickets", "persistIndex", { type: "INTEGER", defaultValue: 0 }).catch(() => {});
+    await qi.createTable("system_notices", {
+      id: { type: "INTEGER", primaryKey: true, autoIncrement: true },
+      message: { type: "TEXT" },
+      isActive: { type: "BOOLEAN", defaultValue: false },
+      scheduledAt: { type: "DATE" },
+      createdAt: { type: "DATE" },
+      updatedAt: { type: "DATE" },
+    }).catch(() => {});
+    await qi.addColumn("system_notices", "scheduledAt", { type: "DATE" }).catch(() => {});
 
     await seedPlans();
     await seedAdminUser();

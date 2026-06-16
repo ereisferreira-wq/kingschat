@@ -2,13 +2,18 @@ import { Op } from "sequelize";
 import ScheduleTask from "../../shared/database/models/ScheduleTask";
 import ScheduleLog from "../../shared/database/models/ScheduleLog";
 import Customer from "../../shared/database/models/Customer";
+import Ticket from "../../shared/database/models/Ticket";
+import Message from "../../shared/database/models/Message";
 import Whatsapp from "../../shared/database/models/Whatsapp";
 import { sendMessage } from "../whatsapp/whatsappService";
 import logger from "../../shared/utils/logger";
+import { processPersistFollowUps } from "../../shared/services/persistService";
 
 const BATCH_SIZE = 50;
+const CLEANUP_INTERVAL = 60 * 60 * 1000; // 1 hora
 
 let interval: NodeJS.Timeout | null = null;
+let cleanupInterval: NodeJS.Timeout | null = null;
 
 export function startScheduler() {
   logger.info("Scheduler service started");
@@ -19,15 +24,51 @@ export function startScheduler() {
     } catch (err) {
       logger.error("Scheduler error:", err);
     }
+    try {
+      await processPersistFollowUps();
+    } catch (err) {
+      logger.error("Persist error:", err);
+    }
   }, 60 * 1000);
 
   processDueTasks();
+
+  cleanupInterval = setInterval(cleanupClosedTickets, CLEANUP_INTERVAL);
+  cleanupClosedTickets();
 }
 
 export function stopScheduler() {
   if (interval) {
     clearInterval(interval);
     interval = null;
+  }
+  if (cleanupInterval) {
+    clearInterval(cleanupInterval);
+    cleanupInterval = null;
+  }
+}
+
+export async function cleanupClosedTickets() {
+  try {
+    const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    const closedTickets = await Ticket.findAll({
+      where: {
+        status: "closed",
+        createdAt: { [Op.lt]: cutoff },
+      },
+      attributes: ["id"],
+      raw: true,
+    });
+
+    if (closedTickets.length === 0) return;
+
+    const ids = closedTickets.map((t: any) => t.id);
+    await Message.destroy({ where: { ticketId: ids } });
+    await Ticket.destroy({ where: { id: ids } });
+
+    logger.info(`Cleanup: deleted ${ids.length} closed tickets older than 48h`);
+  } catch (err) {
+    logger.error("Cleanup error:", err);
   }
 }
 

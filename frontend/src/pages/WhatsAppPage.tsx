@@ -11,17 +11,29 @@ import { QRCodeSVG } from "qrcode.react";
 import { useSocket } from "../hooks/useSocket";
 
 export default function WhatsAppPage() {
+  const SECTORS = ["", "vendas", "financeiro", "adm", "suporte"];
   const [whatsapps, setWhatsapps] = useState<any[]>([]);
   const [name, setName] = useState("");
+  const [sector, setSector] = useState("");
   const [showQR, setShowQR] = useState<number | null>(null);
   const [qrData, setQrData] = useState<string | null>(null);
+  const [plan, setPlan] = useState<any>(null);
   const showQRRef = useRef<number | null>(null);
 
   const load = () => {
-    api.get("/whatsapp").then((r) => setWhatsapps(r.data.whatsapps));
+    Promise.all([
+      api.get("/whatsapp").then((r) => r.data.whatsapps),
+      api.get("/company").then((r) => r.data.company),
+    ]).then(([ws, company]) => {
+      setWhatsapps(ws);
+      setPlan(company.plan);
+    });
   };
 
   useEffect(() => { load() }, []);
+
+  const maxWhatsapps = plan?.maxConnections || 1;
+  const atLimit = whatsapps.length >= maxWhatsapps;
 
   useEffect(() => { showQRRef.current = showQR; }, [showQR]);
 
@@ -51,9 +63,10 @@ export default function WhatsAppPage() {
   const create = async () => {
     if (!name) return toast.error("Digite um nome");
     try {
-      await api.post("/whatsapp", { name });
+      await api.post("/whatsapp", { name, sector });
       toast.success("Conexão criada!");
       setName("");
+      setSector("");
       load();
     } catch (err: any) {
       toast.error(err.response?.data?.error || "Erro");
@@ -104,23 +117,47 @@ export default function WhatsAppPage() {
           </div>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Nova Conexão</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-3">
-              <Input
-                placeholder="Nome da conexão (ex: Vendas)"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-              <Button onClick={create}>
-                <Plus className="w-4 h-4 mr-2" /> Adicionar
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Nova Conexão</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-3">
+                <Input
+                  placeholder="Nome (ex: Vendas Principal)"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="flex-1"
+                  disabled={atLimit}
+                />
+                <select
+                  className="w-40 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={sector}
+                  onChange={(e) => setSector(e.target.value)}
+                  disabled={atLimit}
+                >
+                  <option value="">Sem setor</option>
+                  <option value="vendas">Vendas</option>
+                  <option value="financeiro">Financeiro</option>
+                  <option value="adm">ADM</option>
+                  <option value="suporte">Suporte</option>
+                </select>
+                <Button onClick={create} disabled={atLimit}>
+                  <Plus className="w-4 h-4 mr-2" /> Adicionar
+                </Button>
+              </div>
+              {atLimit && (
+                <p className="text-xs text-destructive mt-2">
+                  Limite do plano atingido ({maxWhatsapps} conexões). Faça upgrade para adicionar mais.
+                </p>
+              )}
+              {plan && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Plano {plan.name}: {whatsapps.length}/{maxWhatsapps} conexões usadas
+                </p>
+              )}
+            </CardContent>
+          </Card>
 
         <div className="grid gap-4">
           {whatsapps.map((w) => (
@@ -137,6 +174,9 @@ export default function WhatsAppPage() {
                   <div>
                     <p className="font-medium">{w.name}</p>
                     <p className="text-sm text-muted-foreground">{w.number || "---"}</p>
+                    {w.sector && (
+                      <Badge variant="outline" className="mt-1 mr-1">{w.sector}</Badge>
+                    )}
                     <Badge
                       variant={
                         w.status === "CONNECTED"

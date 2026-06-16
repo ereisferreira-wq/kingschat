@@ -8,7 +8,7 @@ import { Badge } from "../components/ui/badge";
 import { useAuthStore } from "../stores/authStore";
 import api from "../lib/api";
 import toast from "react-hot-toast";
-import { Search, CheckCircle, XCircle, Building, Mail, Calendar, ArrowUp, Trash2, Users, DollarSign, Save, X } from "lucide-react";
+import { Search, CheckCircle, XCircle, Building, Mail, Calendar, ArrowUp, Trash2, Users, DollarSign, Save, X, Megaphone } from "lucide-react";
 
 export default function AdminPanel() {
   const { user } = useAuthStore();
@@ -19,6 +19,9 @@ export default function AdminPanel() {
   const [plans, setPlans] = useState<any[]>([]);
   const [editingPlan, setEditingPlan] = useState<any>(null);
   const [planForm, setPlanForm] = useState({ name: "", price: "", maxUsers: 1, maxConnections: 1, maxContacts: 500, useChatbot: false });
+  const [noticeMessage, setNoticeMessage] = useState("");
+  const [noticeActive, setNoticeActive] = useState(false);
+  const [noticeScheduledAt, setNoticeScheduledAt] = useState("");
 
   const load = () => {
     const params = new URLSearchParams();
@@ -34,6 +37,17 @@ export default function AdminPanel() {
   };
 
   useEffect(() => { loadPlans() }, []);
+
+  useEffect(() => {
+    api.get("/admin/notice").then(r => {
+      setNoticeMessage(r.data.notice?.message || "");
+      setNoticeActive(r.data.notice?.isActive || false);
+      if (r.data.notice?.scheduledAt) {
+        const d = new Date(r.data.notice.scheduledAt);
+        setNoticeScheduledAt(d.toISOString().slice(0, 16));
+      }
+    }).catch(() => {});
+  }, []);
 
   const approve = async (id: number) => {
     try {
@@ -199,6 +213,65 @@ export default function AdminPanel() {
             </CardContent>
           </Card>
         )}
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Megaphone className="w-5 h-5" />
+              Aviso do Sistema
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <textarea
+              className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm"
+              value={noticeMessage}
+              onChange={(e) => setNoticeMessage(e.target.value)}
+              placeholder="Ex: Sistema ficará fora do ar para manutenção. Após reiniciar, será necessário logar o WhatsApp novamente."
+            />
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="text-sm font-medium block mb-1">Agendar para (opcional)</label>
+                <input
+                  type="datetime-local"
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={noticeScheduledAt}
+                  onChange={(e) => setNoticeScheduledAt(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground mt-1">Se vazio, aparece na hora. Dura 1h.</p>
+              </div>
+              <div className="flex items-end gap-3">
+                <label className="flex items-center gap-2 cursor-pointer pb-2">
+                  <input
+                    type="checkbox"
+                    checked={noticeActive}
+                    onChange={(e) => setNoticeActive(e.target.checked)}
+                    className="rounded"
+                  />
+                  <span className="text-sm">Ativar agora</span>
+                </label>
+              </div>
+            </div>
+            <Button onClick={async () => {
+              try {
+                const payload: any = { message: noticeMessage };
+                if (noticeScheduledAt) {
+                  payload.scheduledAt = new Date(noticeScheduledAt).toISOString();
+                  payload.isActive = false;
+                } else {
+                  payload.isActive = noticeActive;
+                  payload.scheduledAt = null;
+                }
+                await api.put("/admin/notice", payload);
+                setNoticeActive(payload.isActive);
+                toast.success("Aviso salvo!");
+              } catch (err: any) {
+                toast.error(err.response?.data?.error || "Erro ao salvar");
+              }
+            }}>
+              <Save className="w-4 h-4 mr-2" /> Salvar Aviso
+            </Button>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>

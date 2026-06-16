@@ -11,6 +11,7 @@ import Subscription from "./Subscription";
 import Customer from "./Customer";
 import ScheduleTask from "./ScheduleTask";
 import ScheduleLog from "./ScheduleLog";
+import SystemNotice from "./SystemNotice";
 
 const models = {
   User,
@@ -25,6 +26,7 @@ const models = {
   Customer,
   ScheduleTask,
   ScheduleLog,
+  SystemNotice,
 };
 
 export default models;
@@ -41,4 +43,5 @@ export {
   Customer,
   ScheduleTask,
   ScheduleLog,
+  SystemNotice,
 };

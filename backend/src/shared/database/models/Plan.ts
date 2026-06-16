@@ -24,6 +24,14 @@ class Plan extends Model<Plan> {
   @Column(DataType.INTEGER)
   maxContacts: number;
 
+  @Default(3)
+  @Column(DataType.INTEGER)
+  maxProducts: number;
+
+  @Default(3)
+  @Column(DataType.INTEGER)
+  maxPersist: number;
+
   @Column(DataType.FLOAT)
   price: number;
 

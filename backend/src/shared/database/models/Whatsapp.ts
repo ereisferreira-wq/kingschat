@@ -45,6 +45,9 @@ class Whatsapp extends Model<Whatsapp> {
   @Column(DataType.STRING)
   token: string;
 
+  @Column({ type: DataType.STRING, defaultValue: "" })
+  sector: string;
+
   @Column(DataType.DATE)
   createdAt: Date;
 

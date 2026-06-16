@@ -17,6 +17,7 @@ import ChatbotConfig from "./models/ChatbotConfig";
 import Customer from "./models/Customer";
 import ScheduleTask from "./models/ScheduleTask";
 import ScheduleLog from "./models/ScheduleLog";
+import SystemNotice from "./models/SystemNotice";
 
 const dialect = process.env.DB_DIALECT || "sqlite";
 
@@ -50,7 +51,7 @@ if (dialect === "sqlite") {
 db.addModels([
   User, Company, Plan, Subscription, Whatsapp,
   Ticket, Contact, Message, ChatbotConfig,
-  Customer, ScheduleTask, ScheduleLog,
+  Customer, ScheduleTask, ScheduleLog, SystemNotice,
 ]);
 
 export default db;

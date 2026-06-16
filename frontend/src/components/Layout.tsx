@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
 import { cn } from "../lib/utils";
+import api from "../lib/api";
 import {
   Crown,
   MessageSquare,
@@ -17,6 +18,7 @@ import {
   Clock,
   Shield,
   Key,
+  Megaphone,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { ChangePasswordModal } from "./ChangePasswordModal";
@@ -40,6 +42,33 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [notice, setNotice] = useState<{ message: string; isActive: boolean; expiresIn?: string; scheduledAt?: string; status?: string } | null>(null);
+
+  const loadNotice = () => {
+    api.get("/admin/notice").then(r => {
+      const n = r.data.notice;
+      if (n?.isActive && n?.message) {
+        setNotice(n);
+      } else if (n?.status === "scheduled" && n?.scheduledAt) {
+        const d = new Date(n.scheduledAt);
+        const now = new Date();
+        const msLeft = d.getTime() - now.getTime();
+        if (msLeft > 0) {
+          const h = Math.floor(msLeft / (1000 * 60 * 60));
+          const m = Math.floor((msLeft % (1000 * 60 * 60)) / (1000 * 60));
+          setNotice({ ...n, isActive: false, expiresIn: `${h}h ${m}m` });
+        }
+      } else {
+        setNotice(null);
+      }
+    }).catch(() => {});
+  };
+
+  useEffect(() => {
+    loadNotice();
+    const interval = setInterval(loadNotice, 30000); // atualiza a cada 30s
+    return () => clearInterval(interval);
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -143,6 +172,24 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </span>
           </div>
         </header>
+
+        {notice && (
+          <div className={`mx-6 mt-4 px-4 py-3 rounded-lg text-sm font-medium border flex items-start gap-3 ${
+            notice.status === "scheduled"
+              ? "bg-yellow-50 text-yellow-700 border-yellow-200"
+              : "bg-red-50 text-red-700 border-red-200"
+          }`}>
+            <Megaphone className="w-5 h-5 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              {notice.status === "scheduled" ? (
+                <span>Manutenção agendada em <strong>{notice.expiresIn}</strong> — {notice.message}</span>
+              ) : (
+                <span>{notice.message}{notice.expiresIn ? ` (expira em ${notice.expiresIn})` : ""}</span>
+              )}
+            </div>
+            <button onClick={() => setNotice(null)} className="ml-auto hover:opacity-70 flex-shrink-0 text-lg leading-none">&times;</button>
+          </div>
+        )}
 
         {user?.company?.dueDate && (() => {
           const due = new Date(user.company.dueDate);

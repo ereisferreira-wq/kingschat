@@ -1,45 +1,47 @@
-import OpenAI from "openai";
 import axios from "axios";
-import { proto } from "@whiskeysockets/baileys";
+import { proto, isLidUser } from "@whiskeysockets/baileys";
 import ChatbotConfig from "../../shared/database/models/ChatbotConfig";
 import Ticket from "../../shared/database/models/Ticket";
 import Message from "../../shared/database/models/Message";
 import Contact from "../../shared/database/models/Contact";
 import Customer from "../../shared/database/models/Customer";
+import Whatsapp from "../../shared/database/models/Whatsapp";
 import logger from "../../shared/utils/logger";
 import { emitToCompany } from "../../lib/socket";
-import User from "../../shared/database/models/User";
 import { getConnection } from "../../shared/services/connectionManager";
 
 
 const TRANSFER_FLAG = "[TRANSFERIR]";
+const TRANSFER_SETOR_FLAG = "[TRANSFERIR_SETOR:";
 const REMAINING_ATTEMPTS_FLAG = "[TENTATIVAS_RESTANTES:";
 
-function getOpenAI(config: ChatbotConfig) {
-  const apiKey = config.apiKey || process.env.OPENAI_API_KEY || "";
-  return new OpenAI({ apiKey });
-}
+async function callGroq(messages: { role: string; content: string }[]) {
+  const apiKey = process.env.GROQ_API_KEY;
+  const model = process.env.AI_MODEL || "llama-3.1-8b-instant";
 
-async function callOpenAI(
-  messages: { role: string; content: string }[],
-  config: ChatbotConfig
-) {
-  const openai = getOpenAI(config);
-  const completion = await openai.chat.completions.create({
-    model: config.aiModel || "gpt-4o",
-    messages: messages as any,
-    temperature: config.temperature || 0.7,
-    max_tokens: config.maxTokens || 2048,
+  logger.info(`callGroq: ${model}`);
+
+  const response = await axios.post("https://api.groq.com/openai/v1/chat/completions", {
+    model,
+    messages,
+    temperature: 0.7,
+    max_tokens: 200,
+  }, {
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    timeout: 30000,
   });
-  return completion.choices[0]?.message?.content || "";
+
+  const content = response.data.choices?.[0]?.message?.content || "";
+  logger.info(`callGroq response: ${content.slice(0, 100)}...`);
+  return content;
 }
 
-async function callOllama(
-  messages: { role: string; content: string }[],
-  config: ChatbotConfig
-) {
-  const baseUrl = process.env.OLLAMA_BASE_URL || config.ollamaBaseUrl || "http://localhost:11434";
-  const model = config.aiModel || process.env.OLLAMA_MODEL || "llama3";
+async function callOllama(messages: { role: string; content: string }[]) {
+  const baseUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+  const model = process.env.AI_MODEL || "qwen2.5:3b";
 
   logger.info(`callOllama: ${model} @ ${baseUrl}/api/chat`);
 
@@ -48,8 +50,8 @@ async function callOllama(
     messages,
     stream: false,
     options: {
-      temperature: config.temperature || 0.7,
-      num_predict: 256,
+      temperature: 0.7,
+      num_predict: 30,
       num_ctx: 2048,
     },
   }, { timeout: 120000 });
@@ -59,7 +61,18 @@ async function callOllama(
   return content;
 }
 
+async function callAI(messages: { role: string; content: string }[]) {
+  if (process.env.GROQ_API_KEY) {
+    return callGroq(messages);
+  }
+  return callOllama(messages);
+}
+
 const DADOS_REGEX = /\[DADOS:\s*(.*?)\]/i;
+
+function stripDados(text: string): string {
+  return text.replace(DADOS_REGEX, '').trim();
+}
 
 function parseExtractedData(text: string): Record<string, string> | null {
   const match = text.match(DADOS_REGEX);
@@ -86,18 +99,31 @@ async function saveExtractedData(
   try {
     const existing = JSON.parse(contact.customFields || "{}");
     const merged = { ...existing, ...data };
-    await contact.update({ customFields: JSON.stringify(merged) });
+    const newName = merged.nome || merged.name || "";
+    const updateData: any = { customFields: JSON.stringify(merged) };
+    if (newName && contact.name === contact.number) {
+      updateData.name = newName;
+    }
+    await contact.update(updateData);
 
-    // Sync to CRM
     const customer = await Customer.findOne({ where: { phone: contact.number, companyId } });
+    const crmNotes = Object.entries(merged)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join("\n");
     if (customer) {
-      const crmNotes = Object.entries(merged)
-        .map(([k, v]) => `${k}: ${v}`)
-        .join("\n");
       await customer.update({
-        name: merged.nome || merged.name || customer.name,
+        name: newName || customer.name,
         notes: crmNotes,
         tags: Object.keys(merged).join(", "),
+      });
+    } else {
+      await Customer.create({
+        name: newName || contact.name || contact.number,
+        phone: contact.number,
+        notes: crmNotes,
+        tags: Object.keys(merged).join(", "),
+        status: "lead",
+        companyId,
       });
     }
 
@@ -130,17 +156,28 @@ async function getAiResponse(
   config: ChatbotConfig,
   companyId: number,
   remainingAttempts: number,
-  history?: { role: string; content: string }[]
+  whatsappId: number,
+  history?: { role: string; content: string }[],
+  collectedFields?: string[]
 ) {
   const name = config.attendantName || "Atendente";
   const sector = config.sector ? ` do setor ${config.sector}` : "";
 
-  const personaRule =
-    `Você é ${name}, atendente${sector}. ` +
-    `Responda SEMPRE em primeira pessoa como se fosse o próprio atendente. ` +
-    `Nunca trate a conversa como treinamento, simulação ou exemplo. ` +
-    `Você NÃO é uma IA sendo treinada — você é o atendente real. ` +
-    `Seja direto, educado e objetivo.`;
+  const allWas = await Whatsapp.findAll({
+    where: { companyId },
+    attributes: ["sector"],
+  });
+  const sectorsList = [...new Set(allWas.map(s => s.sector).filter(Boolean))];
+
+  const mainPrompt = config.systemPrompt?.trim()
+    ? config.systemPrompt
+    : `Você é ${name}, atendente${sector} REAL (não IA). Responda em 1ª pessoa. Máximo 50 palavras.`;
+
+  const emojiInstruction = config.emojiLevel === "none"
+    ? `\n\nNÃO use emojis. Mantenha apenas texto.`
+    : config.emojiLevel === "excessive"
+      ? `\n\nUse muitos emojis para tornar a conversa divertida e expressiva. Seja exagerado com emojis.`
+      : `\n\nUse emojis com moderação para tornar a conversa mais amigável quando apropriado.`;
 
   const transferInstruction = config.transferToHuman
     ? `\n\nNão soube responder? Escreva "${TRANSFER_FLAG}" ao final. Tentativas: ${remainingAttempts}. Fim: "${TRANSFER_FLAG}${REMAINING_ATTEMPTS_FLAG}0]"`
@@ -150,28 +187,37 @@ async function getAiResponse(
     ? `\n\nInstruções de atendimento:\n${config.attendanceInstructions}`
     : "";
 
-  const systemPrompt = config.systemPrompt
-    ? `\n\n${config.systemPrompt}`
-    : "";
-
-  const transferPrompt =
-    config.transferPrompt ||
-    "";
-
   let context = "";
   if (config.knowledgeBase?.trim()) {
     context = `\n\nBase de conhecimento:\n${config.knowledgeBase}`;
   }
 
-  const extractionFields = (config.extractionFields || "nome, cidade, placa")
-    .split(",").map(s => s.trim()).filter(Boolean);
-
-  let extractionPrompt = "";
-  if (extractionFields.length > 0) {
-    extractionPrompt = `\n\nColete: ${extractionFields.join(", ")}. Ao final: [DADOS: campo=valor, ...]`;
+  let sectorTransferInstruction = "";
+  if (sectorsList.length > 1) {
+    sectorTransferInstruction =
+      `\n\nSETORES DISPONÍVEIS: ${sectorsList.join(", ")}. ` +
+      `Se o cliente precisar de um setor diferente do seu, escreva "${TRANSFER_SETOR_FLAG}setor]" ex: "${TRANSFER_SETOR_FLAG}vendas]".`;
   }
 
-  const fullSystemPrompt = personaRule + instructions + systemPrompt + transferPrompt + transferInstruction + context + extractionPrompt;
+  const aiGoal = config.aiGoal?.trim()
+    ? `\n\nMETA DA IA:\n${config.aiGoal}`
+    : "";
+
+  const extractionFields = config.extractionFields?.trim()
+    ? config.extractionFields.split(",").map(s => s.trim()).filter(Boolean)
+    : [];
+  const remainingFields = collectedFields && collectedFields.length > 0
+    ? extractionFields.filter(f => !collectedFields.includes(f.toLowerCase()))
+    : extractionFields;
+  const collectedNote = collectedFields && collectedFields.length > 0
+    ? `\n\nJÁ COLETADO: ${collectedFields.join(", ")}. NÃO pergunte novamente.`
+    : "";
+  const extractionInstruction = remainingFields.length > 0
+    ? `\n\nExtraia do cliente: ${remainingFields.join(", ")}. ` +
+      `Quando obtiver todos, responda com "[DADOS: campo=valor, campo2=valor2]" SOMENTE com campos preenchidos.` + collectedNote
+    : collectedNote;
+
+  const fullSystemPrompt = mainPrompt + emojiInstruction + aiGoal + context + instructions + sectorTransferInstruction + extractionInstruction + transferInstruction;
 
   const messages: { role: string; content: string }[] = [
     { role: "system", content: fullSystemPrompt },
@@ -183,10 +229,7 @@ async function getAiResponse(
 
   messages.push({ role: "user", content: message });
 
-  if (config.aiProvider === "ollama") {
-    return callOllama(messages, config);
-  }
-  return callOpenAI(messages, config);
+  return callAI(messages);
 }
 
 async function saveBotMessage(
@@ -237,7 +280,18 @@ export async function handleWhatsAppMessage(
     const isGroup = remoteJid.endsWith("@g.us");
     if (isGroup) return;
 
-    const number = remoteJid.replace("@s.whatsapp.net", "");
+    let number = remoteJid.split("@")[0];
+    if (isLidUser(remoteJid)) {
+      try {
+        const sock = getConnection(whatsappId);
+        const sockAny = sock as any;
+        const lidMapping = sockAny?.signalRepository?.lidMapping;
+        if (lidMapping?.getPNForLID) {
+          const pn = await lidMapping.getPNForLID(remoteJid);
+          if (pn) number = pn;
+        }
+      } catch (_) {}
+    }
 
     let contact = await Contact.findOne({
       where: { number, companyId },
@@ -245,12 +299,15 @@ export async function handleWhatsAppMessage(
 
     if (!contact) {
       contact = await Contact.create({
-        name: number,
+        name: msg.pushName || number,
         number,
         companyId,
       });
+    } else if (msg.pushName && contact.name === contact.number) {
+      await contact.update({ name: msg.pushName });
     }
 
+    let isNewTicket = false;
     let ticket = await Ticket.findOne({
       where: {
         contactId: contact.id,
@@ -260,6 +317,7 @@ export async function handleWhatsAppMessage(
     });
 
     if (!ticket) {
+      isNewTicket = true;
       ticket = await Ticket.create({
         contactId: contact.id,
         whatsappId,
@@ -268,7 +326,29 @@ export async function handleWhatsAppMessage(
         isBot: true,
         botTransferAttempts: 0,
       });
+    }
 
+    // Save incoming message FIRST — antes de qualquer processamento
+    const savedMsg = await Message.create({
+      body: text,
+      fromMe: false,
+      ticketId: ticket.id,
+      contactId: contact.id,
+      companyId,
+    });
+
+    emitToCompany(companyId, "ticket:updated", {
+      ticketId: ticket.id,
+      lastMessage: text,
+      contact: { id: contact.id, name: contact.name, number: contact.number },
+    });
+
+    emitToCompany(companyId, "message:new", {
+      ticketId: ticket.id,
+      message: { id: savedMsg.id, body: text, fromMe: false, createdAt: savedMsg.createdAt },
+    });
+
+    if (isNewTicket) {
       try {
         const existing = await Customer.findOne({ where: { phone: contact.number, companyId } });
         if (!existing) {
@@ -279,6 +359,8 @@ export async function handleWhatsAppMessage(
             companyId,
           });
           logger.info(`CRM auto-created for ${contact.number}`);
+        } else if (contact.name !== contact.number) {
+          await existing.update({ name: contact.name });
         }
       } catch (crmErr) {
         logger.error("Failed to auto-create CRM:", crmErr);
@@ -300,25 +382,6 @@ export async function handleWhatsAppMessage(
       }
     }
 
-    await Message.create({
-      body: text,
-      fromMe: false,
-      ticketId: ticket.id,
-      contactId: contact.id,
-      companyId,
-    });
-
-    emitToCompany(companyId, "ticket:updated", {
-      ticketId: ticket.id,
-      lastMessage: text,
-      contact: { id: contact.id, name: contact.name, number: contact.number },
-    });
-
-    emitToCompany(companyId, "message:new", {
-      ticketId: ticket.id,
-      message: { body: text, fromMe: false },
-    });
-
     if (ticket.status === "open" && !ticket.isBot) {
       logger.info(`Ticket ${ticket.id} already with human`);
       return;
@@ -336,26 +399,87 @@ export async function handleWhatsAppMessage(
     }
 
     const remainingAttempts = Math.max(0, maxAttempts - attempts);
-    const historyCutoff = new Date(Date.now() - 48 * 60 * 60 * 1000);
+
+    // History por contato (numero), nao apenas ticket — pra ter contexto de conversas anteriores
     const recentMessages = await Message.findAll({
-      where: { ticketId: ticket.id, companyId },
+      where: { contactId: contact.id, companyId },
       attributes: ["body", "fromMe", "createdAt"],
-      order: [["createdAt", "ASC"]],
+      order: [["createdAt", "DESC"]],
+      limit: 50,
     });
+    // Remove marcadores [DADOS: ...] do historio pra nao confundir a IA
     const history = recentMessages
-      .filter((m) => new Date(m.createdAt) >= historyCutoff)
-      .slice(-30)
+      .reverse()
       .map((m) => ({
         role: m.fromMe ? "assistant" : "user",
-        content: m.body,
+        content: m.body.replace(/\[DADOS:[^\]]*\]/g, '').trim(),
       }));
-    const rawResponse = await getAiResponse(
+    // Dados coletados SOMENTE neste ticket (nao carrega de conversas anteriores)
+    let collectedFields: string[] = [];
+    const dadosRegex = /\[DADOS:\s*(.*?)\]/i;
+    for (const msg of recentMessages) {
+      if (msg.fromMe) {
+        const match = msg.body.match(dadosRegex);
+        if (match) {
+          const pairs = match[1].split(",").map(s => s.trim()).filter(Boolean);
+          for (const pair of pairs) {
+            const eqIdx = pair.indexOf("=");
+            if (eqIdx > 0) {
+              const key = pair.slice(0, eqIdx).trim().toLowerCase();
+              const val = pair.slice(eqIdx + 1).trim();
+              if (key && val && !collectedFields.includes(key)) collectedFields.push(key);
+            }
+          }
+        }
+      }
+    }
+    let rawResponse = await getAiResponse(
       text,
       config,
       companyId,
       remainingAttempts,
-      history
+      whatsappId,
+      history,
+      collectedFields
     );
+
+    // Re-check if ticket was claimed during AI processing
+    const freshTicket = await Ticket.findByPk(ticket.id, { attributes: ["isBot", "status"] });
+    if (freshTicket && (!freshTicket.isBot || freshTicket.status === "closed")) {
+      logger.info(`Ticket ${ticket.id} was taken by human while AI was thinking, discarding response`);
+      return;
+    }
+
+    // Filtro de seguranca: remove precos e percentuais da resposta
+    rawResponse = rawResponse.replace(/R?\$[\d\s.,]+/g, '').trim();
+    rawResponse = rawResponse.replace(/\d+[\s]?reais/gi, '').trim();
+    rawResponse = rawResponse.replace(/\d+%/g, '').trim();
+
+    const sectorMatch = rawResponse.match(/\[TRANSFERIR_SETOR:([a-zà-ú]+)\]/i);
+    if (sectorMatch) {
+      const targetSector = sectorMatch[1].toLowerCase();
+      const cleanResponse = rawResponse.replace(/\[TRANSFERIR_SETOR:[a-zà-ú]+\]/i, '').trim();
+      const targetWa = await Whatsapp.findOne({
+        where: { companyId, sector: targetSector, status: "CONNECTED" },
+      });
+      await ticket.update({
+        status: "open",
+        isBot: false,
+        sector: targetSector,
+        whatsappId: targetWa?.id || whatsappId,
+      });
+      if (cleanResponse) {
+        await saveBotMessage(whatsappId, remoteJid, ticket.id, contact.id, companyId, `${stripDados(cleanResponse)}\n\n🔀 Transferi para o setor ${targetSector.toUpperCase()}.`);
+      }
+      emitToCompany(companyId, "ticket:updated", {
+        ticketId: ticket.id,
+        sector: targetSector,
+        status: "open",
+        isBot: false,
+        contact: { id: contact.id, name: contact.name, number: contact.number },
+      });
+      return;
+    }
 
     if (rawResponse.includes(TRANSFER_FLAG)) {
       attempts++;
@@ -368,7 +492,7 @@ export async function handleWhatsAppMessage(
 
       if (attempts >= maxAttempts || forceTransfer) {
         if (cleanResponse) {
-          await saveBotMessage(whatsappId, remoteJid, ticket.id, contact.id, companyId, cleanResponse);
+          await saveBotMessage(whatsappId, remoteJid, ticket.id, contact.id, companyId, stripDados(cleanResponse));
         }
         try {
           const extracted = parseExtractedData(rawResponse);
@@ -393,7 +517,7 @@ export async function handleWhatsAppMessage(
       await ticket.update({ botTransferAttempts: 0 });
     }
 
-    await saveBotMessage(whatsappId, remoteJid, ticket.id, contact.id, companyId, rawResponse);
+    await saveBotMessage(whatsappId, remoteJid, ticket.id, contact.id, companyId, stripDados(rawResponse));
 
     try {
       const extracted = parseExtractedData(rawResponse);
@@ -435,6 +559,7 @@ async function transferToHuman(
     isBot: false,
     botSessionId: null,
     botTransferAttempts: 0,
+    persistIndex: 0,
   });
 
   const transferMsg =

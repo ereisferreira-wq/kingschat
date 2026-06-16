@@ -170,6 +170,14 @@ export default function SchedulerPage() {
                 <CalendarDays className="w-4 h-4" />
               </button>
             </div>
+            <Button variant="outline" onClick={async () => {
+              try {
+                await api.post("/scheduler/cleanup-tickets");
+                toast.success("Tickets fechados limpos!");
+              } catch { toast.error("Erro ao limpar"); }
+            }}>
+              <Trash2 className="w-4 h-4 mr-2" /> Limpar Tickets
+            </Button>
             <Button variant="outline" onClick={() => loadLogs()}>
               <History className="w-4 h-4 mr-2" /> Logs
             </Button>

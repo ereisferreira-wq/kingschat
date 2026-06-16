@@ -5,6 +5,7 @@ import makeWASocket, {
   WASocket,
   Browsers,
   isJidBroadcast,
+  isLidUser,
   jidNormalizedUser,
   makeCacheableSignalKeyStore,
   proto,
@@ -20,6 +21,7 @@ import Message from "../../shared/database/models/Message";
 import Contact from "../../shared/database/models/Contact";
 import { emitToCompany } from "../../lib/socket";
 import { setConnection, getConnection, deleteConnection } from "../../shared/services/connectionManager";
+import { useEncryptedAuthState } from "../../shared/services/cryptoStore";
 
 const MAX_RECONNECT_ATTEMPTS = 15;
 const BASE_RECONNECT_DELAY_MS = 2000;
@@ -92,7 +94,17 @@ async function handleMyOwnMessage(
     const remoteJid = msg.key.remoteJid;
     if (!remoteJid || remoteJid.endsWith("@g.us")) return;
 
-    const number = remoteJid.replace("@s.whatsapp.net", "");
+    let number = remoteJid.split("@")[0];
+    if (isLidUser(remoteJid)) {
+      try {
+        const sockAny = sock as any;
+        const lidMapping = sockAny?.signalRepository?.lidMapping;
+        if (lidMapping?.getPNForLID) {
+          const pn = await lidMapping.getPNForLID(remoteJid);
+          if (pn) number = pn;
+        }
+      } catch (_) {}
+    }
     const contact = await Contact.findOne({ where: { number, companyId } });
     if (!contact) return;
 
@@ -151,7 +163,7 @@ async function doConnectWhatsApp(whatsappId: number): Promise<WASocket> {
   if (!fs.existsSync(sessionPath)) {
     fs.mkdirSync(sessionPath, { recursive: true });
   }
-  const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
+  const { state, saveCreds } = useEncryptedAuthState(sessionPath);
 
   const proxyUrl = process.env.WA_PROXY_URL;
 
@@ -263,11 +275,15 @@ async function doConnectWhatsApp(whatsappId: number): Promise<WASocket> {
 
   sock.ev.on("messages.upsert", async (msg) => {
     for (const message of msg.messages) {
-      if (!message.key.fromMe && message.message) {
-        await handleWhatsAppMessage(whatsappId, whatsapp.companyId, message);
-      }
-      if (message.key.fromMe && message.message) {
-        await handleMyOwnMessage(whatsappId, whatsapp.companyId, message, sock);
+      try {
+        if (!message.key.fromMe && message.message) {
+          await handleWhatsAppMessage(whatsappId, whatsapp.companyId, message);
+        }
+        if (message.key.fromMe && message.message) {
+          await handleMyOwnMessage(whatsappId, whatsapp.companyId, message, sock);
+        }
+      } catch (err: any) {
+        logger.error("Message handler error: " + (err?.message || err));
       }
     }
   });

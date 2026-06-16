@@ -13,11 +13,11 @@ class ChatbotConfig extends Model<ChatbotConfig> {
   @Column(DataType.BOOLEAN)
   isActive: boolean;
 
-  @Default("openai")
+  @Default("ollama")
   @Column(DataType.STRING)
   aiProvider: string;
 
-  @Default("gpt-3.5-turbo")
+  @Default("qwen2.5:14b")
   @Column(DataType.STRING)
   aiModel: string;
 
@@ -84,6 +84,10 @@ class ChatbotConfig extends Model<ChatbotConfig> {
   @Column(DataType.TEXT)
   knowledgeBase: string;
 
+  @Default("moderate")
+  @Column(DataType.STRING)
+  emojiLevel: string;
+
   @Default("")
   @Column(DataType.STRING)
   attendantName: string;
@@ -98,6 +102,13 @@ class ChatbotConfig extends Model<ChatbotConfig> {
   @Default("nome, cidade, placa")
   @Column(DataType.TEXT)
   extractionFields: string;
+
+  @Column(DataType.TEXT)
+  aiGoal: string;
+
+  @Default("[]")
+  @Column(DataType.TEXT)
+  persistIntervals: string;
 
   @ForeignKey(() => Company)
   @Column(DataType.INTEGER)

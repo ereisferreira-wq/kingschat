@@ -59,7 +59,7 @@ export async function getPlanUsage(companyId: number) {
   ]);
 
   return {
-    plan: { id: company.plan.id, name: company.plan.name },
+    plan: { id: company.plan.id, name: company.plan.name, maxProducts: company.plan.maxProducts, maxPersist: company.plan.maxPersist },
     limits: {
       contacts: { current: contacts, max: company.plan.maxContacts },
       whatsapps: { current: whatsapps, max: company.plan.maxConnections },

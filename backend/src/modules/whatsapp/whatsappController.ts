@@ -17,7 +17,7 @@ export async function list(req: Request, res: Response) {
 }
 
 export async function create(req: Request, res: Response) {
-  const { name } = req.body;
+  const { name, sector } = req.body;
 
   const waLimit = await checkWhatsAppLimit(req.companyId);
   if (!waLimit.allowed) {
@@ -38,6 +38,7 @@ export async function create(req: Request, res: Response) {
 
   const whatsapp = await Whatsapp.create({
     name,
+    sector: sector || "",
     companyId: req.companyId,
     status: "DISCONNECTED",
   });

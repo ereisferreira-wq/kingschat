@@ -2,7 +2,7 @@ import { Router } from "express";
 import { isAuth } from "../../shared/middleware/auth";
 import {
   listTasks, getTask, createTask, updateTask,
-  toggleTask, removeTask, getLogs,
+  toggleTask, removeTask, getLogs, runCleanup,
 } from "./schedulerController";
 
 const schedulerRoutes = Router();
@@ -14,5 +14,6 @@ schedulerRoutes.post("/scheduler", isAuth, createTask);
 schedulerRoutes.put("/scheduler/:id", isAuth, updateTask);
 schedulerRoutes.patch("/scheduler/:id/toggle", isAuth, toggleTask);
 schedulerRoutes.delete("/scheduler/:id", isAuth, removeTask);
+schedulerRoutes.post("/scheduler/cleanup-tickets", isAuth, runCleanup);
 
 export default schedulerRoutes;

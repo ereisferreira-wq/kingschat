@@ -43,6 +43,7 @@ services:
       - "${PORT:-3000}:3000"
     volumes:
       - sessions_data:/app/sessions
+      - backend_data:/app/data
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: ${PORT:-3000}
@@ -60,9 +61,12 @@ services:
       BACKEND_URL: ${BACKEND_URL:-https://api.example.com}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@kmenu.ai}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-me-in-production}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
       AI_PROVIDER: ${AI_PROVIDER:-openai}
-      AI_MODEL: ${AI_MODEL:-gpt-3.5-turbo}
+      AI_MODEL: ${AI_MODEL:-llama-3.1-8b-instant}
       WA_PROXY_URL: ${WA_PROXY_URL:-}
+    env_file:
+      - .env
     depends_on:
       postgres:
         condition: service_healthy
@@ -107,4 +111,6 @@ volumes:
   redis_data:
     driver: local
   sessions_data:
+    driver: local
+  backend_data:
     driver: local

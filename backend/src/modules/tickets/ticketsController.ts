@@ -93,7 +93,7 @@ export async function assignTicket(req: Request, res: Response) {
   if (!ticket) {
     return res.status(404).json({ error: "Ticket not found" });
   }
-  await ticket.update({ userId: req.userId, isBot: false, status: "open" });
+  await ticket.update({ userId: req.userId, isBot: false, status: "open", persistIndex: 0 });
   emitToCompany(req.companyId, "ticket:updated", { ticketId: ticket.id });
   res.json({ ticket });
 }
@@ -114,7 +114,7 @@ export async function sendMessage(req: Request, res: Response) {
   }
 
   // Auto-assign to sender + mark human-handled
-  const updates: any = { isBot: false, status: "open" };
+  const updates: any = { isBot: false, status: "open", persistIndex: 0 };
   if (!ticket.userId) updates.userId = req.userId;
   await ticket.update(updates);
 

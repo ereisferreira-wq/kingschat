@@ -73,6 +73,13 @@ class Ticket extends Model<Ticket> {
   @Column(DataType.INTEGER)
   botTransferAttempts: number;
 
+  @Default(0)
+  @Column(DataType.INTEGER)
+  persistIndex: number;
+
+  @Column({ type: DataType.STRING, defaultValue: "" })
+  sector: string;
+
   @Column(DataType.DATE)
   createdAt: Date;
 

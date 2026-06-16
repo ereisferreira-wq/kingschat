@@ -6,207 +6,134 @@ import { Input } from "../components/ui/input";
 import { Badge } from "../components/ui/badge";
 import api from "../lib/api";
 import toast from "react-hot-toast";
-import { Bot, Save, Users, RefreshCw } from "lucide-react";
+import { Bot, Save } from "lucide-react";
+
+const PERSIST_OPTIONS: Record<string, { value: string; label: string }[]> = {
+  basic: [
+    { value: "[1,10,30]", label: "1min, 10min, 30min" },
+    { value: "[5,15,30]", label: "5min, 15min, 30min" },
+    { value: "[10,30,60]", label: "10min, 30min, 1h" },
+  ],
+  standard: [
+    { value: "[1,5,10,30,60]", label: "1min, 5min, 10min, 30min, 1h" },
+    { value: "[5,10,30,60,180]", label: "5min, 10min, 30min, 1h, 3h" },
+    { value: "[10,30,60,180,360]", label: "10min, 30min, 1h, 3h, 6h" },
+  ],
+  pro: [
+    { value: "[1,5,10,30,60,180,360,720,1440,2880]", label: "1min, 5min, 10min, 30min, 1h, 3h, 6h, 12h, 24h, 48h" },
+    { value: "[5,10,30,60,180,360,720,1440,2880,4320]", label: "5min, 10min, 30min, 1h, 3h, 6h, 12h, 24h, 48h, 72h" },
+    { value: "[10,30,60,180,360,720,1440,2880,4320,5760]", label: "10min, 30min, 1h, 3h, 6h, 12h, 24h, 48h, 72h, 96h" },
+  ],
+};
 
 export default function ChatbotPage() {
   const [config, setConfig] = useState<any>({
     isActive: true,
-    aiProvider: "openai",
-    aiModel: "gpt-4o",
     attendantName: "",
     sector: "",
     attendanceInstructions: "",
-    systemPrompt: "",
-    temperature: 0.7,
-    maxTokens: 2048,
-    apiKey: "",
-    ollamaBaseUrl: "http://localhost:11434",
     welcomeMessage: "",
-    farewellMessage: "",
+    knowledgeBase: "",
+    systemPrompt: "",
     extractionFields: "nome, cidade, placa",
-    transferToHuman: false,
-    transferKeywords: "",
-    transferMessage: "",
-    maxTransferAttempts: 3,
+    aiGoal: "",
+    persistIntervals: "[]",
+    transferToHuman: true,
+    transferMessage: "Estou transferindo para um atendente humano. Por favor, aguarde um momento.",
+    transferKeywords: "atendente,humano,falar com alguém,quero falar com,transferir,suporte,reclamação,ajuda",
   });
+  const [plan, setPlan] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [ollamaModels, setOllamaModels] = useState<string[]>([]);
-  const [loadingModels, setLoadingModels] = useState(false);
+  const [productLabels, setProductLabels] = useState<string[]>([]);
 
   useEffect(() => {
-    api
-      .get("/chatbot/config")
-      .then((r) => setConfig(r.data.config))
+    Promise.all([
+      api.get("/chatbot/config").then((r) => r.data.config),
+      api.get("/company").then((r) => r.data.company),
+    ])
+      .then(([cfg, company]) => {
+        setConfig((prev: any) => ({ ...prev, ...cfg }));
+        setPlan(company.plan);
+        const existingProducts = (company as any).productsServices || "";
+        try {
+          const parsed = JSON.parse(existingProducts);
+          if (Array.isArray(parsed)) setProductLabels(parsed);
+          else setProductLabels(existingProducts ? [existingProducts] : []);
+        } catch {
+          setProductLabels(existingProducts ? [existingProducts] : []);
+        }
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
-  const fetchOllamaModels = async () => {
-    setLoadingModels(true);
-    try {
-      const r = await api.get("/chatbot/models");
-      setOllamaModels(r.data.models || []);
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || "Erro ao buscar modelos");
-    } finally {
-      setLoadingModels(false);
-    }
-  };
-
-  useEffect(() => {
-    if (config.aiProvider === "ollama") {
-      fetchOllamaModels();
-    }
-  }, [config.aiProvider]);
-
   const save = async () => {
     try {
       await api.put("/chatbot/config", config);
+      await api.put("/company", {
+        productsServices: JSON.stringify(productLabels.filter(Boolean)),
+      });
       toast.success("Configurações salvas!");
     } catch (err: any) {
       toast.error(err.response?.data?.error || "Erro ao salvar");
     }
   };
 
+  const maxProducts = plan?.maxProducts || 3;
+  const planKey = plan?.name?.toLowerCase() === "pro" ? "pro"
+    : plan?.name?.toLowerCase() === "standard" ? "standard"
+    : "basic";
+  const persistOptions = PERSIST_OPTIONS[planKey] || PERSIST_OPTIONS.basic;
+
+  const handleProductChange = (idx: number, val: string) => {
+    const updated = [...productLabels];
+    updated[idx] = val;
+    setProductLabels(updated);
+  };
+
   return (
     <Layout>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold">Chatbot IA</h1>
-          <p className="text-muted-foreground">
-            Configure seu assistente inteligente
-          </p>
+      <div className="space-y-6 max-w-3xl">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Chatbot</h1>
+            <p className="text-muted-foreground">Configure seu atendente automático</p>
+          </div>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={config.isActive}
+              onClick={() => setConfig({ ...config, isActive: !config.isActive })}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                config.isActive ? "bg-green-500" : "bg-gray-300 dark:bg-gray-600"
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  config.isActive ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </button>
+            <span className="text-sm font-medium">
+              {config.isActive ? "Ativo" : "Inativo"}
+            </span>
+          </label>
         </div>
 
         {loading ? (
-          <p>Carregando...</p>
+          <p className="text-muted-foreground">Carregando...</p>
         ) : (
           <>
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Bot className="w-5 h-5" />
-                  Provedor de IA
+                  Identidade do Atendente
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={config.isActive}
-                    onClick={() => setConfig({ ...config, isActive: !config.isActive })}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      config.isActive ? "bg-green-500" : "bg-gray-300 dark:bg-gray-600"
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        config.isActive ? "translate-x-6" : "translate-x-1"
-                      }`}
-                    />
-                  </button>
-                  <span className="text-sm font-medium">
-                    Chatbot ativo {config.isActive ? "🟢" : "🔴"}
-                  </span>
-                </label>
-              </CardContent>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <Button
-                    variant={config.aiProvider === "openai" ? "default" : "outline"}
-                    onClick={() => setConfig({ ...config, aiProvider: "openai" })}
-                  >
-                    OpenAI (GPT)
-                  </Button>
-                  <Button
-                    variant={config.aiProvider === "ollama" ? "default" : "outline"}
-                    onClick={() => setConfig({ ...config, aiProvider: "ollama" })}
-                  >
-                    Ollama (Local)
-                  </Button>
-                </div>
-                <div>
-                  <label className="text-sm font-medium block mb-1">Modelo</label>
-                  {config.aiProvider === "openai" ? (
-                    <select
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      value={config.aiModel}
-                      onChange={(e) => setConfig({ ...config, aiModel: e.target.value })}
-                    >
-                      <option value="gpt-5">GPT-5</option>
-                      <option value="gpt-4o">GPT-4o</option>
-                      <option value="gpt-4o-mini">GPT-4o Mini</option>
-                      <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                      <option value="gpt-4">GPT-4</option>
-                      <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                      <option value="o1">o1</option>
-                      <option value="o1-mini">o1 Mini</option>
-                      <option value="o3-mini">o3 Mini</option>
-                    </select>
-                  ) : (
-                    <div className="flex gap-2">
-                      <Input
-                        value={config.aiModel}
-                        onChange={(e) => setConfig({ ...config, aiModel: e.target.value })}
-                        placeholder="Ex: llama3.2"
-                        className="flex-1"
-                      />
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={fetchOllamaModels}
-                        disabled={loadingModels}
-                        title="Buscar modelos disponíveis"
-                      >
-                        <RefreshCw className={`w-4 h-4 ${loadingModels ? "animate-spin" : ""}`} />
-                      </Button>
-                    </div>
-                  )}
-                  {config.aiProvider === "ollama" && ollamaModels.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {ollamaModels.map((m) => (
-                        <Badge
-                          key={m}
-                          variant={config.aiModel === m ? "default" : "outline"}
-                          className="cursor-pointer"
-                          onClick={() => setConfig({ ...config, aiModel: m })}
-                        >
-                          {m.replace(/^.*\//, "")}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                {config.aiProvider === "openai" && (
-                  <div>
-                    <label className="text-sm font-medium block mb-1">API Key OpenAI</label>
-                    <Input
-                      value={config.apiKey}
-                      onChange={(e) => setConfig({ ...config, apiKey: e.target.value })}
-                      placeholder="sk-..."
-                    />
-                  </div>
-                )}
-                {config.aiProvider === "ollama" && (
-                  <div>
-                    <label className="text-sm font-medium block mb-1">URL Base Ollama</label>
-                    <Input
-                      value={config.ollamaBaseUrl}
-                      onChange={(e) => setConfig({ ...config, ollamaBaseUrl: e.target.value })}
-                      placeholder="http://localhost:11434"
-                    />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Personalidade do Bot</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="text-sm font-medium block mb-1">Nome do Atendente</label>
                     <Input
@@ -217,67 +144,76 @@ export default function ChatbotPage() {
                   </div>
                   <div>
                     <label className="text-sm font-medium block mb-1">Setor</label>
-                    <Input
+                    <select
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       value={config.sector}
                       onChange={(e) => setConfig({ ...config, sector: e.target.value })}
-                      placeholder="Ex: Seguros Loovi"
-                    />
+                    >
+                      <option value="">Selecione</option>
+                      <option value="vendas">Vendas</option>
+                      <option value="financeiro">Financeiro</option>
+                      <option value="adm">ADM</option>
+                      <option value="suporte">Suporte</option>
+                    </select>
                   </div>
+                </div>
+                <div className="mt-2">
+                  <label className="text-sm font-medium block mb-1">Uso de Emojis</label>
+                  <select
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={config.emojiLevel || "moderate"}
+                    onChange={(e) => setConfig({ ...config, emojiLevel: e.target.value })}
+                  >
+                    <option value="none">Não usar emojis</option>
+                    <option value="moderate">Moderado</option>
+                    <option value="excessive">Exagerado</option>
+                  </select>
                 </div>
                 <div>
                   <label className="text-sm font-medium block mb-1">Instruções de Atendimento</label>
                   <textarea
-                    className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    className="w-full min-h-[100px] rounded-md border border-input bg-background px-3 py-2 text-sm"
                     value={config.attendanceInstructions}
                     onChange={(e) => setConfig({ ...config, attendanceInstructions: e.target.value })}
-                    placeholder="Ex: Sempre pergunte o nome do cliente antes de iniciar. Ofereça as opções de seguro: carro, moto, vida, residencial."
+                    placeholder="Ex: Sempre pergunte o nome do cliente. Ofereça os produtos com benefícios, não só preço. Se for reclamação, acolha e transfira."
                   />
                 </div>
-                <div>
-                  <label className="text-sm font-medium block mb-1">
-                    Campos para extrair dos clientes
-                  </label>
-                  <Input
-                    value={config.extractionFields}
-                    onChange={(e) => setConfig({ ...config, extractionFields: e.target.value })}
-                    placeholder="nome, cidade, placa, veiculo, telefone"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Separe por vírgulas. A IA vai perguntar esses dados e salvar automaticamente no CRM.
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium block mb-1">
-                    Prompt do Sistema (opcional)
-                  </label>
-                  <textarea
-                    className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    value={config.systemPrompt}
-                    onChange={(e) => setConfig({ ...config, systemPrompt: e.target.value })}
-                    placeholder="Instruções extras para a IA (opcional)"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium block mb-1">
-                      Temperatura ({config.temperature})
-                    </label>
-                    <input
-                      type="range" min="0" max="2" step="0.1"
-                      value={config.temperature}
-                      onChange={(e) => setConfig({ ...config, temperature: parseFloat(e.target.value) })}
-                      className="w-full"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium block mb-1">Max Tokens</label>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Produtos / Serviços</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {Array.from({ length: maxProducts }).map((_, idx) => (
+                  <div key={idx}>
+                    <label className="text-sm font-medium block mb-1">Produto/Serviço {idx + 1}</label>
                     <Input
-                      type="number"
-                      value={config.maxTokens}
-                      onChange={(e) => setConfig({ ...config, maxTokens: parseInt(e.target.value) })}
+                      value={productLabels[idx] || ""}
+                      onChange={(e) => handleProductChange(idx, e.target.value)}
+                      placeholder={`Ex: Seguro Auto, Seguro Residencial, ...`}
                     />
                   </div>
-                </div>
+                ))}
+                <p className="text-xs text-muted-foreground">
+                  Seu plano permite até {maxProducts} produtos/serviços.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Mensagem de Boas-Vindas</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <textarea
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  rows={2}
+                  value={config.welcomeMessage}
+                  onChange={(e) => setConfig({ ...config, welcomeMessage: e.target.value })}
+                  placeholder="Olá! Sou o assistente virtual. Como posso ajudar?"
+                />
               </CardContent>
             </Card>
 
@@ -286,23 +222,46 @@ export default function ChatbotPage() {
                 <CardTitle>Base de Conhecimento</CardTitle>
               </CardHeader>
               <CardContent>
+                <textarea
+                  className="w-full min-h-[150px] rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={config.knowledgeBase || ""}
+                  onChange={(e) => setConfig({ ...config, knowledgeBase: e.target.value })}
+                  placeholder={`Ex: Horário de funcionamento: seg a sex 8h-18h
+Produtos: seguro auto R$150/mês, seguro residencial R$80/mês
+Diferenciais: atendimento 24h, carro reserva grátis`}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Informações que a IA usará para responder os clientes.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Extração de Dados</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium block mb-1">
-                    Informações da empresa para a IA consultar
-                  </label>
+                  <label className="text-sm font-medium block mb-1">Meta da IA</label>
                   <textarea
-                    className="w-full min-h-[200px] rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
-                    value={config.knowledgeBase || ""}
-                    onChange={(e) => setConfig({ ...config, knowledgeBase: e.target.value })}
-                    placeholder={`Ex: Somos a empresa XYZ, fundada em 2020.
-Atendemos de seg a sex das 8h às 18h.
-Nosso produto principal é...
-Preços: ...
-Política de devolução: ...`}
+                    className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={config.aiGoal || ""}
+                    onChange={(e) => setConfig({ ...config, aiGoal: e.target.value })}
+                    placeholder="Ex: Extrair placa, nome, modelo do veículo, cidade ou endereço do cliente durante a conversa"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Escreva aqui todas as informações que a IA deve saber para atender seus clientes. 
-                    Quanto mais detalhado, melhor será a resposta.
+                    Objetivo principal que a IA deve seguir ao extrair dados.
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium block mb-1">Dados para Extrair</label>
+                  <Input
+                    value={config.extractionFields || ""}
+                    onChange={(e) => setConfig({ ...config, extractionFields: e.target.value })}
+                    placeholder="nome, cidade, placa"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Separe por vírgulas. A IA vai perguntar esses dados e salvar automaticamente no CRM.
                   </p>
                 </div>
               </CardContent>
@@ -310,114 +269,51 @@ Política de devolução: ...`}
 
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="w-5 h-5" />
-                  Transferência para Humano
-                </CardTitle>
+                <CardTitle>Persistência</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={config.transferToHuman}
-                    onChange={(e) => setConfig({ ...config, transferToHuman: e.target.checked })}
-                    className="w-4 h-4"
-                  />
-                  <span className="text-sm font-medium">
-                    Ativar transferência para atendente humano
-                  </span>
-                </label>
-
-                {config.transferToHuman && (
-                  <>
-                    <div>
-                      <label className="text-sm font-medium block mb-1">
-                        Palavras-chave para transferir
-                      </label>
-                      <Input
-                        value={config.transferKeywords}
-                        onChange={(e) => setConfig({ ...config, transferKeywords: e.target.value })}
-                        placeholder="atendente, humano, falar com alguém, suporte"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Separe por vírgulas. Se o cliente digitar qualquer uma dessas palavras, a conversa é transferida.
-                      </p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium block mb-1">
-                        Tentativas antes de transferir
-                      </label>
-                      <Input
-                        type="number"
-                        min={1}
-                        max={10}
-                        value={config.maxTransferAttempts}
-                        onChange={(e) => setConfig({ ...config, maxTransferAttempts: parseInt(e.target.value) || 3 })}
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Quantas vezes a IA pode falhar em responder antes de transferir pro humano. (recomendado: 3)
-                      </p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium block mb-1">
-                        Mensagem de transferência
-                      </label>
-                      <textarea
-                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        rows={2}
-                        value={config.transferMessage}
-                        onChange={(e) => setConfig({ ...config, transferMessage: e.target.value })}
-                        placeholder="Estou transferindo para um atendente humano. Por favor, aguarde."
-                      />
-                    </div>
-                    <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-md text-sm text-blue-700 dark:text-blue-300">
-                      <strong>Como funciona:</strong> Quando o cliente pede atendente ou a IA não sabe responder, ela tenta até <strong>{config.maxTransferAttempts || 3} vezes</strong> antes de transferir pro humano. A cada tentativa, o cliente é convidado a reformular a pergunta.
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Mensagens</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-3">
                 <div>
-                  <label className="text-sm font-medium block mb-1">Mensagem de boas-vindas</label>
-                  <textarea
+                  <label className="text-sm font-medium block mb-1">Intervalos de Follow-up</label>
+                  <select
                     className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    rows={2}
-                    value={config.welcomeMessage}
-                    onChange={(e) => setConfig({ ...config, welcomeMessage: e.target.value })}
-                    placeholder="Olá! Como posso ajudar?"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium block mb-1">Mensagem de encerramento</label>
-                  <textarea
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    rows={2}
-                    value={config.farewellMessage}
-                    onChange={(e) => setConfig({ ...config, farewellMessage: e.target.value })}
-                    placeholder="Obrigado pelo contato!"
-                  />
+                    value={config.persistIntervals || "[]"}
+                    onChange={(e) => setConfig({ ...config, persistIntervals: e.target.value })}
+                  >
+                    <option value="[]">Desligado</option>
+                    {persistOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Após o cliente parar de responder, a IA enviará follow-ups nos intervalos acima.
+                    Seu plano: {planKey === "pro" ? "Top" : planKey === "standard" ? "Standard" : "Basic"} (até {plan?.maxPersist || 3} mensagens).
+                  </p>
                 </div>
               </CardContent>
             </Card>
 
             <div className="flex items-center gap-4">
               <Button onClick={save}>
-                <Save className="w-4 h-4 mr-2" /> Salvar Configurações
+                <Save className="w-4 h-4 mr-2" /> Salvar
+              </Button>
+              <Button variant="destructive" onClick={async () => {
+                const clean = {
+                  ...config,
+                  attendanceInstructions: "",
+                  systemPrompt: "",
+                  knowledgeBase: "",
+                };
+                setConfig(clean);
+                try {
+                  await api.put("/chatbot/config", clean);
+                  toast.success("IA resetada!");
+                } catch { toast.error("Erro ao resetar"); }
+              }}>
+                Resetar IA
               </Button>
               <Badge variant={config.isActive ? "success" : "secondary"}>
                 {config.isActive ? "Bot Ativo" : "Bot Inativo"}
               </Badge>
-              {config.transferToHuman && (
-                <Badge variant="warning">
-                  Transferência humana ativa
-                </Badge>
-              )}
             </div>
           </>
         )}

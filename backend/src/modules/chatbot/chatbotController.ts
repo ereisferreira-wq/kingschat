@@ -13,10 +13,9 @@ export async function getConfig(req: Request, res: Response) {
     config = await ChatbotConfig.create({
       companyId: req.companyId,
       isActive: true,
-      aiProvider: "openai",
-      aiModel: "gpt-4o",
-      systemPrompt:
-        "Você é um assistente de atendimento ao cliente. Responda de forma educada e profissional. Durante a conversa, pergunte o nome, cidade e placa do veículo do cliente para registro.",
+      aiProvider: "ollama",
+      aiModel: "qwen2.5:14b",
+      systemPrompt: "Você é um assistente de atendimento ao cliente. Responda de forma educada e profissional.",
       temperature: 0.7,
       maxTokens: 2048,
       knowledgeBase: "",
@@ -159,8 +158,8 @@ INSTRUÇÕES:
     config = await ChatbotConfig.create({
       companyId: req.companyId,
       isActive: true,
-      aiProvider: "openai",
-      aiModel: "gpt-4o",
+      aiProvider: "ollama",
+      aiModel: "qwen2.5:14b",
       systemPrompt,
       knowledgeBase,
       temperature: 0.7,
