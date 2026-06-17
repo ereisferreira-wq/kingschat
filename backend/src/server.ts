@@ -152,6 +152,7 @@ async function startup() {
     await qi.addColumn("plans", "maxProducts", { type: "INTEGER", defaultValue: 3 }).catch(() => {});
     await qi.addColumn("plans", "maxPersist", { type: "INTEGER", defaultValue: 3 }).catch(() => {});
     await qi.addColumn("tickets", "persistIndex", { type: "INTEGER", defaultValue: 0 }).catch(() => {});
+    await qi.addColumn("tickets", "sector", { type: "STRING", defaultValue: "" }).catch(() => {});
     await qi.createTable("system_notices", {
       id: { type: "INTEGER", primaryKey: true, autoIncrement: true },
       message: { type: "TEXT" },
