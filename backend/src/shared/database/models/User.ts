@@ -37,6 +37,10 @@ class User extends Model<User> {
   @Column(DataType.BOOLEAN)
   super: boolean;
 
+  @Default(false)
+  @Column(DataType.BOOLEAN)
+  approved: boolean;
+
   @ForeignKey(() => Company)
   @Column(DataType.INTEGER)
   companyId: number;
