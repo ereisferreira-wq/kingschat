@@ -1,0 +1,147 @@
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v3.0
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      TRAEFIK_API_INSECURE: "false"
+      TRAEFIK_ENTRYPOINTS_WEB_ADDRESS: ":80"
+      TRAEFIK_ENTRYPOINTS_WEBSECURE_ADDRESS: ":443"
+      TRAEFIK_PROVIDERS_DOCKER: "true"
+      TRAEFIK_PROVIDERS_DOCKER_EXPOSEDBYDEFAULT: "false"
+      TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL: "admin@kingschat.com.br"
+      TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_STORAGE: "/letsencrypt/acme.json"
+      TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_HTTPCHALLENGE: "true"
+      TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_HTTPCHALLENGE_ENTRYPOINT: "web"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - traefik_data:/letsencrypt
+    networks:
+      - kmenu-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.kingschat.com.br`)"
+      - "traefik.http.routers.traefik.service=api@internal"
+
+  postgres:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:-kmenu}
+      POSTGRES_PASSWORD: ${DB_PASS:-change-me-in-production}
+      POSTGRES_DB: ${DB_NAME:-kmenu_ai}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - kmenu-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-kmenu}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    command: redis-server --requirepass ${REDIS_PASSWORD:-change-me-in-production}
+    volumes:
+      - redis_data:/data
+    networks:
+      - kmenu-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: ${PORT:-3000}
+      DB_HOST: postgres
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USER: ${DB_USER:-kmenu}
+      DB_PASS: ${DB_PASS:-change-me-in-production}
+      DB_NAME: ${DB_NAME:-kmenu_ai}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-change-me-in-production}@redis:6379
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-in-production}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      AI_PROVIDER: ${AI_PROVIDER:-groq}
+      AI_MODEL: ${AI_MODEL:-llama-3.1-8b-instant}
+      FRONTEND_URL: ${FRONTEND_URL:-https://app.kingschat.com.br}
+      BACKEND_URL: ${BACKEND_URL:-https://api.kingschat.com.br}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@kingschat.com.br}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-me-in-production}
+    volumes:
+      - sessions_data:/app/sessions
+      - backend_data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - kmenu-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kingschat-backend.rule=Host(`api.kingschat.com.br`)"
+      - "traefik.http.routers.kingschat-backend.entrypoints=websecure"
+      - "traefik.http.routers.kingschat-backend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.kingschat-backend.loadbalancer.server.port=3000"
+      - "traefik.http.middlewares.kingschat-backend-cors.headers.accesscontrolalloworiginlist=https://app.kingschat.com.br"
+      - "traefik.http.middlewares.kingschat-backend-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
+      - "traefik.http.routers.kingschat-backend.middlewares=kingschat-backend-cors"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      VITE_API_URL: ${BACKEND_URL:-https://api.kingschat.com.br}
+    depends_on:
+      - backend
+    networks:
+      - kmenu-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kingschat-frontend.rule=Host(`app.kingschat.com.br`)"
+      - "traefik.http.routers.kingschat-frontend.entrypoints=websecure"
+      - "traefik.http.routers.kingschat-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.kingschat-frontend.loadbalancer.server.port=80"
+
+networks:
+  kmenu-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  sessions_data:
+    driver: local
+  backend_data:
+    driver: local
+  traefik_data:
+    driver: local
